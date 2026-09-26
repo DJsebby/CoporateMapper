@@ -1,0 +1,28 @@
+## Archives
+
+    Wayback machine
+    Archive.fo
+    WayBack Machine - Robots.txt
+
+    Pastebin - Pastebin.com
+    site:pastebin <company> <desired info>
+
+
+
+## Leaks
+
+  haveibeenpwned.com
+  dehashed.com
+  grayhatwarfare.com
+
+
+## Infrastructure = Domain / DNS
+
+Crt.sh
+
+
+
+Automation:
+
+
+## Archives
