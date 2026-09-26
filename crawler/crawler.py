@@ -40,6 +40,16 @@ class URLFetcher:
             headers={"User-Agent": self.config.user_agent},
         )
 
+    def close(self) -> None:
+        """Close the HTTP client owned by this fetcher."""
+        self.client.close()
+
+    def __enter__(self) -> URLFetcher:
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
     def fetch_page(self, url: str) -> PageDocument | None:
         try:
             response = self.client.get(url)
