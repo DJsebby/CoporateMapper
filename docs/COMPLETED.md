@@ -14,6 +14,9 @@ Append completed tasks using the template below. Record actual verification and 
 
 ## Historical Work
 
+## RECON-001 — Google Custom Search name lookup
+
+
 The following entry predates the current setup. Its observations describe that earlier state; current context and instructions supersede them.
 
 ## 2026-09-26 — Supporting files for an understanding-focused agent workflow
@@ -104,3 +107,33 @@ The following entry predates the current setup. Its observations describe that e
 - **Verification:** RUN_NEO4J_TESTS=1 .venv/bin/python -m unittest -v test_demo test_extractor test_api passed all 34 cases, including eight new demo tests. Live cleanup tests preserve unrelated people, non-demo evidence attached to demo people, shared evidence, edited demo evidence, and unowned ID collisions. Exercised the actual CLI sequence seed, seed, --delete, seed: repeated seeding did not duplicate records; cleanup removed 17 people and 17 evidence records; 17 people were then restored. Verified through the UI API that demo organisation counts are 12 and five (one shared person), scores stay null, and full details are available. Existing TestClient/httpx deprecation warning remains non-failing. git diff --check passed.
 - **Decisions:** CEO requested demo database data and a flag deleting only that data. Cleanup requires explicit ownership plus exact IDs, preserves changed evidence and nodes with other links, and refuses to claim unmarked collisions. Keep demo version-one fixture identity and timestamps stable; any future revision needs distinct versioning and cleanup support.
 - **Remaining Issues:** Seed and cleanup commands should run sequentially because concurrent uniqueness constraints remain outside scope. Cleanup deliberately retains records with additional links or modified evidence and reports them rather than deleting potentially unrelated data. Demo is left loaded for user testing; run demo.py --delete and refresh the UI to remove it.
+
+## RECON-001 — Google Custom Search name lookup
+
+- **Task ID:** RECON-001
+- **Date:** 2026-09-26
+- **Work Completed:** Added a CLI and typed query/result objects in `recon/name.py`. It builds a name plus company/role query, sends one Google Custom Search API request when explicitly invoked, and returns at most 10 title/URL/snippet records. Added offline mock-based tests and documented the environment variables, API status, and API-only boundary.
+- **Files Changed:** Added `test_name.py`; updated `recon/name.py`, `requirements.txt`, `.env.example`, `README.md`, `docs/DATA_SOURCES.md`, `docs/SECURITY.md`, `docs/TASKS.md`, `docs/DECISIONS.md`, and this log.
+- **Verification:** Test command `python -m unittest -v test_name` was skipped at the user's direction. Editor diagnostics found no issues in `test_name.py`; `recon/name.py` reported unresolved `dotenv` because the newly declared `python-dotenv` dependency is not installed in the current environment. No Google request was made and `.env` was not opened.
+- **Decisions:** Recorded DEC-002 per the CEO's explicit API selection. Keep the script to API results only; do not scrape pages or evade anti-bot controls.
+- **Remaining Issues:** Install project requirements before running the CLI. The API requires both `GOOGLE_API_KEY` and `GOOGLE_CSE_ID`; live API behavior remains unverified. Google states this API is unavailable to new customers and existing access ends January 1, 2027.
+
+## RECON-002 — Migrate name lookup to Serper
+
+- **Task ID:** RECON-002
+- **Date:** 2026-09-26
+- **Work Completed:** Replaced the Google Custom Search client with Serper's POST API, reading `SERPER_API_KEY` and parsing the `organic` results array. Preserved the input and top-10 result objects. Updated mocked tests, `.env.example`, and provider documentation.
+- **Files Changed:** Updated `recon/name.py`, `test_name.py`, `.env.example`, `README.md`, `docs/DATA_SOURCES.md`, `docs/SECURITY.md`, `docs/TASKS.md`, `docs/DECISIONS.md`, and this log.
+- **Verification:** No live search was made. The user's previous instruction to skip the test command remains in effect. Editor diagnostics found no issues in `test_name.py`; `recon/name.py` only reports that `python-dotenv` is not installed in the current environment (it remains declared in `requirements.txt`). A static scan found no stale Google provider references in active source/config/docs, and `git diff --check` passed.
+- **Decisions:** DEC-003 supersedes DEC-002 for this utility. Keep Serper credentials in `.env` and do not fetch result pages.
+- **Remaining Issues:** Install project requirements before running the CLI. Serper API behavior remains unverified against the live service.
+
+## RECON-003 — Simplify Serper request with http.client
+
+- **Task ID:** RECON-003
+- **Date:** 2026-09-26
+- **Work Completed:** Replaced the `httpx` client and result-object layer with a single `http.client.HTTPSConnection` helper. Simplified `test_name.py` to make one configured search and print Serper's raw JSON response. Updated run instructions.
+- **Files Changed:** Updated `recon/name.py`, `test_name.py`, `README.md`, `docs/REQUIREMENTS.md`, `docs/TASKS.md`, `docs/DECISIONS.md`, and this log.
+- **Verification:** No live search or test command was run. Editor diagnostics are pending.
+- **Decisions:** Recorded DEC-004. Keep the Serper key in local environment configuration; do not hardcode or print it.
+- **Remaining Issues:** Runtime behavior against the live Serper service remains unverified.
