@@ -54,3 +54,23 @@ The following entry predates the current setup. Its observations describe that e
 - **Verification:** Checked all local Markdown links, final newlines, and trailing whitespace; git diff --check passed. No application tests or builds apply to this documentation-only repository.
 - **Decisions:** Recorded the CEO-approved stack in DEC-001. Organised documentation as requested; retained the root instruction entry point for agent discovery.
 - **Remaining Issues:** CEO selection between Celery and RQ is still needed before implementing the task queue. Detailed architecture and implementation remain pending approval.
+
+## EXTRACT-001 — People extractor
+
+- **Task ID:** EXTRACT-001
+- **Date:** 2026-09-26
+- **Work Completed:** Implemented Extractor(driver, database=None), offline extract(page), and transactional process(page). Extracts explicit Schema.org Person JSON-LD and HTML microdata, resolves document-local references and relative URLs, preserves associated professional/contact fields and source evidence, ranks completeness using the approved confidence weights, and writes Person / PersonEvidence nodes through a caller-owned synchronous Neo4j driver. Uses only standard-library imports plus the existing PageDocument model.
+- **Files Changed:** Added extractor.py; appended this entry to docs/COMPLETED.md. crawler/models.py remains unchanged. Temporary tests were kept outside the repository.
+- **Verification:** All 11 temporary unittest cases passed: nested JSON-LD graphs and references, URL reference objects and local cycles, exact scoring and stable ordering, microdata scope isolation, itemref and void elements, malformed neighbouring records, conservative identity matching, invalid-page no-write behaviour, repeatable parameterised writes and conflicting evidence, propagated database failures with session closure, and no confidence boost from repetition. git diff --check passed; verified crawler/models.py has no diff. Database interaction was tested with a recording driver double, not a live Neo4j instance.
+- **Decisions:** CEO explicitly requested implementation of the supplied plan, authorising this extractor, its 0.60/0.15/0.10/0.10/0.05 confidence weights, and minimal Person / PersonEvidence graph structure. Preserve each claim in JSON evidence; retain maximum confidence on Person nodes. Do not provision databases, install dependencies, or modify other application components.
+- **Remaining Issues:** Live Neo4j integration remains unverified without a supplied database. The caller must supply the synchronous driver and available database. Concurrent-write uniqueness requires separately approved database constraints; no migrations or constraints were created.
+
+## NEO4J-001 — Local database and extractor connection
+
+- **Task ID:** NEO4J-001
+- **Date:** 2026-09-26
+- **Work Completed:** Started Neo4j Community 5.26 using Docker Compose with localhost-only Browser/Bolt ports and a persistent data volume. Generated a private password in ignored .env, installed the official Python driver in ignored .venv, and added a context-managed connection helper that verifies access and supplies the driver to the existing extractor. Added a reproducible setup walkthrough and README link.
+- **Files Changed:** Added compose.yaml, .env.example, requirements.txt, database.py, docs/NEO4J.md. Updated README.md and docs/COMPLETED.md. Created local ignored .env and .venv. Existing extractor.py and crawler/models.py were not modified by this task.
+- **Verification:** docker compose config --quiet passed; service is running on localhost ports 7474 and 7687. database.py verified live authentication and database access. A synthetic PageDocument passed extraction, live storage, readback, exact confidence assertion, and repeat-write deduplication; only its synthetic records were removed afterward. Confirmed .env and .venv are ignored. git diff --check passed. Installed neo4j driver version 6.3.1.
+- **Decisions:** CEO requested a database setup walkthrough and extractor connection, and selected local Docker. Credentials remain local; connection settings use environment variables. Existing person/evidence storage behaviour is preserved.
+- **Remaining Issues:** No running crawler implementation exists to supply real PageDocument inputs. Concurrent-write uniqueness constraints remain outside this task. The local database is running and its data persists across container recreation.

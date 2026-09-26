@@ -4,7 +4,7 @@ CorporateMapper is a defensive cybersecurity / OSINT platform intended to map an
 
 ## Current status
 
-Documentation setup only. Application implementation has not started. The [technology stack](docs/ARCHITECTURE.md) is approved. Detailed architecture, data models, APIs, collection methods, risk scoring, hosting, and deployment design remain pending CEO approval. Celery versus RQ remains undecided.
+The people extractor and its local Neo4j connection are available. See the [Neo4j setup walkthrough](docs/NEO4J.md) to start the database and connect crawler output. The [technology stack](docs/ARCHITECTURE.md) is approved. Detailed architecture, data models, APIs, collection methods, risk scoring, hosting, and deployment design remain pending CEO approval. Celery versus RQ remains undecided.
 
 ## Repository documentation
 
