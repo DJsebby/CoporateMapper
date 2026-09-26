@@ -4,18 +4,20 @@ CorporateMapper is a defensive cybersecurity / OSINT platform intended to map an
 
 ## Current status
 
-Documentation setup only. Application implementation has not started. Architecture, technologies, data models, APIs, collection methods, risk scoring, hosting, and infrastructure decisions are still pending CEO approval.
+Documentation setup only. Application implementation has not started. The [technology stack](docs/ARCHITECTURE.md) is approved. Detailed architecture, data models, APIs, collection methods, risk scoring, hosting, and deployment design remain pending CEO approval. Celery versus RQ remains undecided.
 
 ## Repository documentation
 
+Agent instructions and supporting project documentation live in `docs/`. The root [AGENTS.md](AGENTS.md) directs agents to the full instructions.
+
 | File | Purpose |
 | --- | --- |
-| [AGENTS.md](AGENTS.md) | Agent rules, authority, and workflow |
-| [CONTEXT.md](CONTEXT.md) | Core product concept and defensive purpose |
-| [TASKS.md](TASKS.md) | Approved tasks and reusable task template |
-| [COMPLETED.md](COMPLETED.md) | Completed work and verification log |
-| [DECISIONS.md](DECISIONS.md) | CEO-approved decision log |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture approval status |
+| [docs/AGENTS.md](docs/AGENTS.md) | Agent rules, authority, and workflow |
+| [docs/CONTEXT.md](docs/CONTEXT.md) | Core product concept and defensive purpose |
+| [docs/TASKS.md](docs/TASKS.md) | Approved tasks and reusable task template |
+| [docs/COMPLETED.md](docs/COMPLETED.md) | Completed work and verification log |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | CEO-approved decision log |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Approved technology stack and architecture status |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Placeholder for an approved data model |
 | [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) | Placeholder for approved data sources |
 | [docs/RISK_MODEL.md](docs/RISK_MODEL.md) | Placeholder for an approved risk model |

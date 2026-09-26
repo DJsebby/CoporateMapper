@@ -44,3 +44,13 @@ The following entry predates the current setup. Its observations describe that e
 - **Verification:** Confirmed all four superseded files are absent, remaining local Markdown links resolve, and current guidance contains no references to the deleted files.
 - **Decisions:** CEO explicitly requested removal of redundant documents pointing to replacements.
 - **Remaining Issues:** None for this cleanup. Product architecture and implementation remain pending CEO approval.
+
+## DOCS-003 — Record technology stack and organise documentation
+
+- **Task ID:** DOCS-003
+- **Date:** 2026-09-26
+- **Work Completed:** Recorded the CEO-supplied stack and its approval, keeping Celery or RQ unresolved. Moved agent instructions and supporting project documents into docs/, retained a root agent entry point, and updated links and current scope statements. Preserved historical completion entries.
+- **Files Changed:** Moved AGENTS.md, CONTEXT.md, TASKS.md, DECISIONS.md, ARCHITECTURE.md, and COMPLETED.md into docs/. Added a root AGENTS.md entry point. Updated README.md and the moved AGENTS.md, TASKS.md, DECISIONS.md, ARCHITECTURE.md, and COMPLETED.md.
+- **Verification:** Checked all local Markdown links, final newlines, and trailing whitespace; git diff --check passed. No application tests or builds apply to this documentation-only repository.
+- **Decisions:** Recorded the CEO-approved stack in DEC-001. Organised documentation as requested; retained the root instruction entry point for agent discovery.
+- **Remaining Issues:** CEO selection between Celery and RQ is still needed before implementing the task queue. Detailed architecture and implementation remain pending approval.
