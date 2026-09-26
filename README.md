@@ -4,7 +4,7 @@ CorporateMapper is a defensive cybersecurity / OSINT platform intended to map an
 
 ## Current status
 
-Documentation setup only. Application implementation has not started. The [technology stack](docs/ARCHITECTURE.md) is approved. Detailed architecture, data models, APIs, collection methods, risk scoring, hosting, and deployment design remain pending CEO approval. Celery versus RQ remains undecided.
+The people extractor, local Neo4j connection, and read-only [people map UI](docs/UI.md) are available. See the [Neo4j setup walkthrough](docs/NEO4J.md) to start the database and connect crawler output. The [technology stack](docs/ARCHITECTURE.md) is approved. Detailed architecture, data models, APIs, collection methods, risk scoring, hosting, and deployment design remain pending CEO approval. Celery versus RQ remains undecided.
 
 ## Repository documentation
 
@@ -14,6 +14,9 @@ Agent instructions and supporting project documentation live in `docs/`. The roo
 | --- | --- |
 | [docs/AGENTS.md](docs/AGENTS.md) | Agent rules, authority, and workflow |
 | [docs/CONTEXT.md](docs/CONTEXT.md) | Core product concept and defensive purpose |
+| [docs/DEMO.md](docs/DEMO.md) | Load fictional demo people and delete only that demo |
+| [docs/UI.md](docs/UI.md) | Start and use the people map, data interface, and scaling limits |
+| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | Testing requirements, acceptance cases, and test commands |
 | [docs/TASKS.md](docs/TASKS.md) | Approved tasks and reusable task template |
 | [docs/COMPLETED.md](docs/COMPLETED.md) | Completed work and verification log |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | CEO-approved decision log |
