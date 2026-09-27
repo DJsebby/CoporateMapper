@@ -30,6 +30,12 @@ ROLE_PROFILES = {
     'Consultant': {'skills': ['Management consulting', 'Client advisory'], 'credential': 'Consulting', 'interest': 'Travel', 'prior_role': 'Business Analyst'},
     'Research Analyst': {'skills': ['Data analysis', 'Research methods'], 'credential': 'Research Analysis', 'interest': 'Puzzles', 'prior_role': 'Research Assistant'},
     'Independent Researcher': {'skills': ['Independent research', 'Technical writing'], 'credential': 'Research', 'interest': 'Reading', 'prior_role': 'Research Associate'},
+    'Marketing Director': {'skills': ['Brand strategy', 'Campaign management'], 'credential': 'Marketing Leadership', 'interest': 'Photography', 'prior_role': 'Marketing Manager'},
+    'Finance Manager': {'skills': ['Financial planning', 'Budget analysis'], 'credential': 'Financial Management', 'interest': 'Reading', 'prior_role': 'Financial Analyst'},
+    'Legal Counsel': {'skills': ['Contract review', 'Regulatory compliance'], 'credential': 'Corporate Law', 'interest': 'Chess', 'prior_role': 'Legal Associate'},
+    'Chief Technology Officer': {'skills': ['Technology strategy', 'Engineering leadership'], 'credential': 'Executive Technology Leadership', 'interest': 'Cycling', 'prior_role': 'Engineering Director'},
+    'Executive Assistant': {'skills': ['Calendar management', 'Stakeholder coordination'], 'credential': 'Executive Support', 'interest': 'Travel', 'prior_role': 'Administrative Coordinator'},
+    'IT Support Specialist': {'skills': ['Technical troubleshooting', 'Systems administration'], 'credential': 'IT Support', 'interest': 'Video games', 'prior_role': 'Help Desk Technician'},
 }
 _DEFAULT_ROLE_PROFILE = {'skills': ['Business operations', 'Project coordination'], 'credential': 'Business Operations', 'interest': 'Music', 'prior_role': 'Coordinator'}
 

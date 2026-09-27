@@ -63,7 +63,7 @@ class DemoProfileWorkflow:
             return None
         jobs = self._jobs(person_id)
         result = deepcopy(profile)
-        result.update(populated=False, findings=[], context={'status': 'not_started'})
+        result.update(populated=False, findings=[], context={'status': 'not_started'}, risk_score=None)
         if not jobs:
             return result
         latest = jobs[0]
@@ -74,6 +74,8 @@ class DemoProfileWorkflow:
                 try:
                     result.update(self._checked_snapshot(snapshot, profile))
                     result['populated'] = True
+                    from demo_risk_score import compute_risk_score
+                    result['risk_score'] = compute_risk_score(person_id, result['findings'])
                 except EnrichmentError:
                     result['context'] = {'status': 'failed', 'error': 'Saved demo data is invalid. Populate the demo information again.'}
                     return result

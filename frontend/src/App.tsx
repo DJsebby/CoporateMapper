@@ -4,7 +4,7 @@ import PersonPanel from './PersonPanel'
 import RecentActivity from './RecentActivity'
 import EnrichmentControls, { useEnrichment } from './Enrichment'
 import CompanyDiscovery, { useDiscovery } from './Discovery'
-import { get, type Organisation, type PeoplePage } from './types'
+import { get, post, type Organisation, type PeoplePage } from './types'
 
 const PAGE_SIZE = 8
 const selection = () => { try { return location.hash.startsWith('#person/') ? decodeURIComponent(location.hash.slice(8)) : null } catch { return null } }
@@ -47,13 +47,46 @@ export default function App() {
     return () => controller.abort()
   }, [organisation, query, offset, refresh])
   const organisationName = organisation.startsWith('org:') ? organisation.slice(4) : null
+  // Selecting a demo organisation auto-populates every fictional employee in it
+  // (table + Gemini context), so their view details are already loaded once
+  // clicked. Never runs for a real organisation; already-populated people are skipped.
+  useEffect(() => {
+    if (!organisationName || !organisationName.includes('(Demo)')) return
+    const orgName = organisationName
+    const controller = new AbortController()
+    let cancelled = false
+    let pollTimer: ReturnType<typeof setTimeout>
+    // The populate+Gemini jobs triggered below run in the background, so the
+    // people list fetched once on org-select would otherwise show stale (still
+    // unscored) data until a manual refresh. Poll until every triggered person's
+    // score has actually landed, refreshing the visible map/list each time.
+    function poll(remaining: number) {
+      if (cancelled || remaining <= 0) return
+      get<PeoplePage>(`/api/people?organisation=${encodeURIComponent(orgName)}&limit=200`, controller.signal)
+        .then(check => {
+          if (cancelled) return
+          setRefresh(value => value + 1)
+          if (check.people.some(person => person.risk_score == null)) pollTimer = setTimeout(() => poll(remaining - 1), 3000)
+        })
+        .catch(() => {})
+    }
+    get<PeoplePage>(`/api/people?organisation=${encodeURIComponent(orgName)}&limit=200`, controller.signal)
+      .then(page => {
+        const pending = page.people.filter(person => person.risk_score == null)
+        for (const person of pending) {
+          void post(`/api/demo/profiles/${encodeURIComponent(person.id)}/populate`, {idempotency_key: crypto.randomUUID()}).catch(() => {})
+        }
+        if (pending.length) pollTimer = setTimeout(() => poll(15), 3000)
+      })
+      .catch(() => {})
+    return () => { cancelled = true; controller.abort(); clearTimeout(pollTimer) }
+  }, [organisationName])
   const title = organisationName || (organisation === 'unassigned' ? 'Unassigned people' : 'All organisations')
   const count = data?.total ?? 0
   function closePanel() { history.replaceState(null,'',location.pathname + location.search); setSelected(null) }
   return <div className="app-layout">
-    <aside className="sidebar"><a className="brand" href="#" onClick={() => setSelected(null)}><span className="brand-mark" aria-hidden="true">◈</span><span>Corporate<span className="brand-light">Mapper</span></span></a><div className="workspace-label">WORKSPACE</div><div className="active-nav"><span aria-hidden="true">⌘</span> People map <span className="nav-dot"/></div><div className="sidebar-bottom"><span className="workspace-avatar">CM</span><div><strong>Local workspace</strong><small>Organisation intelligence</small></div></div></aside>
-    <main><header className="topbar"><span>Workspace <span className="breadcrumb-slash">/</span> <strong>People map</strong></span><span className="read-only">Local workspace</span></header>
-      <div className="page-content"><div className="page-heading"><div><div className="eyebrow">ORGANISATION DIRECTORY</div><h1>People map</h1><p>Explore your organisation, one connection at a time.</p></div><button className="button refresh" onClick={() => { setOffset(0); setRefresh(x=>x+1) }} disabled={loading}><span aria-hidden="true">↻</span> Refresh</button></div>
+    <main><header className="topbar"><a className="brand" href="#" onClick={() => setSelected(null)}><span className="brand-mark" aria-hidden="true">◈</span><span>Corporate<span className="brand-light">Mapper</span></span></a></header>
+      <div className="page-content"><div className="page-heading"><div><div className="eyebrow">ORGANISATION DIRECTORY</div><h1>Organisation Hierarchy</h1><p>Map out your organisation's phishing resistance posture</p></div><button className="button refresh" onClick={() => { setOffset(0); setRefresh(x=>x+1) }} disabled={loading}><span aria-hidden="true">↻</span> Refresh</button></div>
         <CompanyDiscovery jobs={discovery.data?.jobs ?? []} onCreated={() => discovery.reload()}/>
         <div className="directory-layout"><div className="map-column">
         <section className="directory" aria-label="People directory"><div className="directory-toolbar"><div className="organisation-filter"><label htmlFor="organisation">Organisation</label><select id="organisation" value={organisation} onChange={event => { setOrganisation(event.target.value); setOffset(0) }}><option value="all">All organisations</option>{organisations.map(org => <option value={org.name === null ? 'unassigned' : `org:${org.name}`} key={org.name ?? 'unassigned'}>{org.name ?? 'Unassigned'} ({org.count})</option>)}</select></div><div className="search-box"><span aria-hidden="true">⌕</span><input aria-label="Search people" placeholder="Search by name or position…" value={search} onChange={event => setSearch(event.target.value)}/>{search && <button aria-label="Clear search" onClick={() => setSearch('')}>×</button>}</div><div className="view-switch" aria-label="View"><button aria-pressed={view==='map'} onClick={() => setView('map')}>Map</button><button aria-pressed={view==='list'} onClick={() => setView('list')}>List</button></div></div>

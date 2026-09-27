@@ -1,4 +1,4 @@
-export type Person = { id: string; names: string[]; job_titles: string[]; organisations: string[]; image_urls?: string[]; score: null; evidence_count: number }
+export type Person = { id: string; names: string[]; job_titles: string[]; organisations: string[]; image_urls?: string[]; score: null; risk_score?: number | null; risk_band?: RiskBand | null; evidence_count: number }
 export type PersonDetail = Person & { profile_urls: string[]; same_as: string[]; emails: string[]; telephones: string[]; evidence: Record<string, unknown>[]; findings?: Finding[]; demo_profile?: DemoProfile | null }
 export type Organisation = { name: string | null; count: number }
 export type PeoplePage = { people: Person[]; total: number; offset: number; limit: number }
@@ -43,4 +43,6 @@ export type PipelineJobsPage = { jobs: PipelineJob[] }
 
 export type ContextStatement = { text: string; reason: string; finding_ids: string[] }
 export type DemoContext = { status: 'not_started' | 'queued' | 'running' | 'completed' | 'failed' | 'interrupted' | 'cancelled'; model?: string; summary?: ContextStatement[]; gaps?: string[]; privacy_implications?: ContextStatement[]; generated_at?: string; error?: string }
-export type DemoProfile = { fixture_id: string; name: string; coverage: 'full' | 'partial' | 'minimal'; fictional: true; populated: boolean; findings: Finding[]; missing_categories: string[]; context: DemoContext; job_id?: string }
+export type RiskBand = 'very_low' | 'low' | 'moderate' | 'high' | 'very_high'
+export type RiskScore = { score: number; band: RiskBand; factors: Record<string, string>; breakdown: Record<string, number> }
+export type DemoProfile = { fixture_id: string; name: string; coverage: 'full' | 'partial' | 'minimal'; fictional: true; populated: boolean; findings: Finding[]; missing_categories: string[]; context: DemoContext; risk_score: RiskScore | null; job_id?: string }

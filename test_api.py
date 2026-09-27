@@ -60,7 +60,7 @@ class PeopleApiTests(unittest.TestCase):
         self.assertEqual(body["people"][0], {
             "id": "alice", "names": ["Alice New Name", "Alice Example"],
             "job_titles": ["Lead", "Engineer"], "organisations": ["acme", "Beta"],
-            "score": None, "evidence_count": 2, "image_urls": [],
+            "score": None, "risk_score": None, "risk_band": None, "evidence_count": 2, "image_urls": [],
         })
         self.assertTrue(all(person["score"] is None for person in body["people"]))
         self.assertNotIn("evidence", body["people"][0])

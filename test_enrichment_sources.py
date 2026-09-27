@@ -220,7 +220,7 @@ class DemoTests(unittest.TestCase):
              patch('enrichment_sources.socket.socket', side_effect=AssertionError('network')):
             provider = DemoSources()
             seeds = provider.seeds()
-            self.assertEqual(len(seeds), 17)
+            self.assertEqual(len(seeds), 23)
             provider.check_search_ready()
             first = seeds[0]
             results = provider.search(first['names'][0], first['organisations'][0])

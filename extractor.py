@@ -517,6 +517,80 @@ class _StaffCardParser(_MicrodataParser):
             yield record, f"html:{card['line']}:{card['column']}"
 
 
+# Some Adobe Experience Manager retail sites (e.g. Mercedes-Benz Australia
+# dealer sites) server-render each team member as a fixed JavaScript assignment
+# hydrating a client component, rather than JSON-LD/microdata/a recognised staff
+# card. Only this exact, fixed assignment shape is matched; the object literal
+# itself is parsed with json.loads, never JavaScript evaluation.
+_AEM_COMPONENT_DATA_PREFIX = re.compile(
+    r"\(\(window\.top\.aemNamespace\s*\|\|\s*\(window\.top\.aemNamespace\s*=\s*\{\}\)\)\s*\."
+    r"componentData\s*\|\|\s*\(window\.top\.aemNamespace\.componentData\s*=\s*\{\}\)\)"
+    r"\[(?:'[^'\\]*'|\"[^\"\\]*\")\]\s*=\s*"
+)
+
+
+def _balanced_json_object(text: str, start: int) -> str | None:
+    """Return the JSON object literal beginning at text[start], or None."""
+    if start >= len(text) or text[start] != "{":
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+    return None
+
+
+def _aem_component_cards(html: str) -> list[dict]:
+    records = []
+    for match in _AEM_COMPONENT_DATA_PREFIX.finditer(html):
+        blob = _balanced_json_object(html, match.end())
+        if blob is None:
+            continue
+        try:
+            data = json.loads(blob)
+        except ValueError:
+            continue
+        payload = data.get("payload") if isinstance(data, dict) else None
+        if not isinstance(payload, dict):
+            continue
+        name = _text(payload.get("name"))
+        if not name:
+            continue
+        image = payload.get("image")
+        image_urls = []
+        if isinstance(image, dict) and isinstance(image.get("sources"), dict):
+            image_urls = _unique([value for value in image["sources"].values() if isinstance(value, str)])
+        role = _text(payload.get("positionRole"))
+        organisation = _text(payload.get("location"))
+        email = _text(payload.get("email"))
+        phone = _text(payload.get("phone"))
+        records.append({
+            "name": name, "jobTitle": [role] if role else [],
+            "worksFor": [organisation] if organisation else [],
+            "email": _email_addresses(email) if email else [], "telephone": [phone] if phone else [],
+            "url": [], "image": image_urls,
+            "_html_evidence": {"card_classes": ["aem-component-data"], "contacts": []},
+        })
+    return records
+
+
 def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -587,6 +661,8 @@ class Extractor:
                 record["url"] = [resolved for value in record["url"]
                                  if (resolved := _url(value, base)) and urlsplit(resolved).scheme in {"http", "https"}]
                 candidates.append((record, "html-staff-card", path))
+            for index, record in enumerate(_aem_component_cards(page.html)):
+                candidates.append((record, "html-staff-card", f"aem-component-data:{index}"))
         results = []
         for record, method, location in candidates:
             result = self._person(record, page, index if method == "json-ld" else {}, method, location)

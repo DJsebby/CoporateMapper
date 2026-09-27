@@ -205,14 +205,15 @@ for (const failure of ['network', 'invalid JSON']) {
 }
 
 
-test('activity panel sits beside the map on desktop and below it on smaller screens', async ({page}) => {
+test('activity panel sits to the left of the map on desktop and below it on smaller screens', async ({page}) => {
   await page.goto('/')
   await expect(page.locator('.organisation-node')).toBeVisible()
   const directory = page.getByRole('region', {name:'People directory'})
   const activity = page.getByRole('region', {name:'Recent activity'})
   const mapBounds = (await directory.boundingBox())!
   const activityBounds = (await activity.boundingBox())!
-  expect(activityBounds.x).toBeGreaterThan(mapBounds.x + mapBounds.width)
+  expect(activityBounds.x + activityBounds.width).toBeLessThanOrEqual(mapBounds.x)
+  expect(activityBounds.y + activityBounds.height).toBeGreaterThanOrEqual(mapBounds.y + mapBounds.height - 2)
   expect(Math.abs(activityBounds.y - mapBounds.y)).toBeLessThan(2)
   const entries = activity.getByRole('listitem')
   const first = (await entries.nth(0).boundingBox())!
@@ -227,4 +228,27 @@ test('activity panel sits beside the map on desktop and below it on smaller scre
     expect(Math.abs(panel.x - map.x)).toBeLessThan(2)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }
+})
+
+test('a fictional demo person\'s risk score colours the avatar and score badge before opening details', async ({page}) => {
+  const risky = {id:'risky-person', names:['Alex Morgan'], job_titles:['Engineer'], organisations:['Fictional Studio'], image_urls:[], score:null, evidence_count:1, risk_score:8.1, risk_band:'high'}
+  const safe = {id:'safe-person', names:['Casey Safe'], job_titles:['Engineer'], organisations:['Fictional Studio'], image_urls:[], score:null, evidence_count:1, risk_score:1.4, risk_band:'very_low'}
+  await page.route('**/api/**', route => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/organisations') return route.fulfill({json:{organisations:[{name:'Fictional Studio',count:2}]}})
+    if (url.pathname === '/api/enrichment/jobs') return route.fulfill({json:{jobs:[],allowance:{limit:10,used:0,remaining:10,provider_exhausted:false}}})
+    if (url.pathname === '/api/pipeline/jobs') return route.fulfill({json:{jobs:[]}})
+    return route.fulfill({json:{people:[risky,safe],total:2,offset:0,limit:8}})
+  })
+  await page.goto('/')
+  await page.getByRole('button',{name:'List'}).click()
+  const riskyCard = page.locator('.person-card').filter({hasText:'Alex Morgan'})
+  const safeCard = page.locator('.person-card').filter({hasText:'Casey Safe'})
+  await expect(riskyCard.locator('.avatar')).toHaveClass(/risk-high/)
+  await expect(riskyCard.locator('.score')).toHaveClass(/risk-high/)
+  await expect(riskyCard.locator('.score')).toContainText('8.1')
+  await expect(safeCard.locator('.avatar')).toHaveClass(/risk-very_low/)
+  await expect(safeCard.locator('.score')).toContainText('1.4')
+  // Neither card was opened, confirming the badge is visible before "View details" is pressed.
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 })

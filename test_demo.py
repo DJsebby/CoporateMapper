@@ -13,12 +13,13 @@ class DemoTests(unittest.TestCase):
     def test_fixtures_are_deterministic_unique_and_fictional(self):
         rows = demo_rows()
         self.assertEqual(rows, demo_rows())
-        self.assertEqual(len(rows), 17)
-        self.assertEqual(len({r['identity_key'] for r in rows}), 17)
-        self.assertEqual(len({r['evidence_key'] for r in rows}), 17)
+        self.assertEqual(len(rows), 23)
+        self.assertEqual(len({r['identity_key'] for r in rows}), 23)
+        self.assertEqual(len({r['evidence_key'] for r in rows}), 23)
         people = [json.loads(row['record_json']) for row in rows]
         self.assertEqual(sum('Meridian Labs (Demo)' in p['organisations'] for p in people), 12)
         self.assertEqual(sum('Northstar Advisory (Demo)' in p['organisations'] for p in people), 5)
+        self.assertEqual(sum('Beacon Financial (Demo)' in p['organisations'] for p in people), 6)
         self.assertEqual(sum(not p['organisations'] for p in people), 1)
         self.assertEqual(sum(not p['job_titles'] for p in people), 1)
         self.assertTrue(all('.invalid/' in p['evidence']['source_url'] for p in people))
@@ -39,7 +40,7 @@ class DemoTests(unittest.TestCase):
             delete.assert_called_once()
 
     def test_cli_defaults_to_seed(self):
-        with patch('demo.connected_extractor'), patch('demo.seed_demo', return_value={'people':17}) as seed, patch('demo.delete_demo') as delete, patch('builtins.print'):
+        with patch('demo.connected_extractor'), patch('demo.seed_demo', return_value={'people':23}) as seed, patch('demo.delete_demo') as delete, patch('builtins.print'):
             main([])
             seed.assert_called_once()
             delete.assert_not_called()
@@ -71,15 +72,15 @@ class LiveDemoTests(unittest.TestCase):
         driver, database = self.extractor.driver, self.extractor.database
         self.assertEqual(delete_demo(driver, database, self.dataset)['people_deleted'], 0)
         for _ in range(2):
-            self.assertEqual(seed_demo(driver, database, self.dataset)['people'], 17)
-        self.assertEqual(self.query('MATCH (n {demo_dataset: $dataset}) RETURN count(n) AS count', dataset=self.dataset)[0]['count'], 34)
-        self.assertEqual(self.query('MATCH ()-[r:HAS_EVIDENCE {demo_dataset: $dataset}]->() RETURN count(r) AS count', dataset=self.dataset)[0]['count'], 17)
+            self.assertEqual(seed_demo(driver, database, self.dataset)['people'], 23)
+        self.assertEqual(self.query('MATCH (n {demo_dataset: $dataset}) RETURN count(n) AS count', dataset=self.dataset)[0]['count'], 46)
+        self.assertEqual(self.query('MATCH ()-[r:HAS_EVIDENCE {demo_dataset: $dataset}]->() RETURN count(r) AS count', dataset=self.dataset)[0]['count'], 23)
         self.query('CREATE (other:Person {identity_key: $external, confidence: 0.4}) '
                    'WITH other MATCH (p:Person {identity_key: $key}) '
                    'CREATE (p)-[:HAS_EVIDENCE]->(:PersonEvidence {evidence_key: $external, record_json: $record})',
                    external=self.external, key=self.rows[0]['identity_key'], record='{"names":["Preserved claim"]}')
         result = delete_demo(driver, database, self.dataset)
-        self.assertEqual(result, dict(people_deleted=16, evidence_deleted=17, links_deleted=17, nodes_retained=1))
+        self.assertEqual(result, dict(people_deleted=22, evidence_deleted=23, links_deleted=23, nodes_retained=1))
         self.assertEqual(self.query('MATCH (p:Person {identity_key: $key})-[:HAS_EVIDENCE]->(e:PersonEvidence {evidence_key: $external}) RETURN e.record_json AS record', key=self.rows[0]['identity_key'], external=self.external), [{'record':'{"names":["Preserved claim"]}'}])
         self.assertEqual(self.query('MATCH (p:Person {identity_key: $external}) RETURN p.confidence AS confidence', external=self.external), [{'confidence':0.4}])
         again = delete_demo(driver, database, self.dataset)
@@ -101,8 +102,8 @@ class LiveDemoTests(unittest.TestCase):
                    'MATCH (e:PersonEvidence {evidence_key: $key}) CREATE (p)-[:HAS_EVIDENCE]->(e)',
                    external=self.external, key=self.rows[0]['evidence_key'])
         result = delete_demo(driver, database, self.dataset)
-        self.assertEqual(result['people_deleted'], 17)
-        self.assertEqual(result['evidence_deleted'], 16)
+        self.assertEqual(result['people_deleted'], 23)
+        self.assertEqual(result['evidence_deleted'], 22)
         self.assertEqual(result['nodes_retained'], 1)
         self.assertEqual(self.query('MATCH (:Person {identity_key: $external})-[:HAS_EVIDENCE]->(e) RETURN count(e) AS count', external=self.external)[0]['count'], 1)
         self.query('MATCH (:Person {identity_key: $external})-[r:HAS_EVIDENCE]->() DELETE r', external=self.external)
@@ -115,8 +116,8 @@ class LiveDemoTests(unittest.TestCase):
         self.query('MATCH (e:PersonEvidence {evidence_key: $key}) SET e.record_json = $record', key=row['evidence_key'], record='{"names":["Edited demo"]}')
         result = delete_demo(self.extractor.driver, self.extractor.database, self.dataset)
         self.assertEqual(result['nodes_retained'], 2)
-        self.assertEqual(result['people_deleted'], 16)
-        self.assertEqual(result['evidence_deleted'], 16)
+        self.assertEqual(result['people_deleted'], 22)
+        self.assertEqual(result['evidence_deleted'], 22)
 
 
 if __name__ == '__main__':

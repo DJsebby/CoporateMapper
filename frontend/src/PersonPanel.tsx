@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { get, observedDate, personName, position, post, readable, safeUrl, type ContextStatement, type DemoProfile, type EnrichmentJob, type Finding, type PersonDetail } from './types'
+import { get, observedDate, personName, position, post, readable, safeUrl, type ContextStatement, type DemoProfile, type EnrichmentJob, type Finding, type PersonDetail, type RiskScore } from './types'
 import PersonAvatar from './PersonAvatar'
 
 const realCategories = ['business_email', 'business_phone', 'interest', 'qualification', 'skill', 'professional_history', 'publication', 'profile_url', 'office_location']
@@ -55,6 +55,20 @@ function SourceList({ citations, findings }: { citations: Map<string, number>; f
   })}</ol></>
 }
 
+function riskFactorLabel(key: string) {
+  return key.replace(/^person\./, '').replace(/_/g, ' ').replace('=', ': ')
+}
+
+function RiskScoreSummary({ risk }: { risk: RiskScore }) {
+  const entries = Object.entries(risk.breakdown).filter(([, points]) => points !== 0)
+  return <div className="risk-summary">
+    <h4>Fictional risk score</h4>
+    <p className={`risk-badge risk-${risk.band}`}>{risk.score.toFixed(1)} / 10 · {readable(risk.band)}</p>
+    <p className="profile-help">A literature-informed phishing-susceptibility heuristic, not a calibrated probability, computed from this profile's authored fictional traits and how much personal data its table currently exposes.</p>
+    {entries.length > 0 && <ul className="risk-breakdown">{entries.map(([key, points]) => <li key={key}>{riskFactorLabel(key)} ({points > 0 ? '+' : ''}{points})</li>)}</ul>}
+  </div>
+}
+
 function ProfileContext({ profile, busy, onRetry }: { profile: DemoProfile; busy: boolean; onRetry: () => void }) {
   const context = profile.context
   const failed = ['failed','interrupted','cancelled'].includes(context.status)
@@ -64,6 +78,7 @@ function ProfileContext({ profile, busy, onRetry }: { profile: DemoProfile; busy
   return <section className="demo-context" aria-labelledby="demo-context-title">
     <h3 id="demo-context-title">Gemini context · fictional demo</h3>
     <div className="fictional-banner"><strong>Safe to demonstrate</strong><p>Every fact and AI insight below is fictional proof-of-concept data from authored, reserved <code>.invalid</code> sources. Nothing here is a real person.</p></div>
+    {profile.risk_score && <RiskScoreSummary risk={profile.risk_score}/>}
     <p className="profile-help">A concise profile summary, missing information and general privacy implications, based only on the authored fixture facts above.</p>
     {!profile.populated && <p className="profile-status">Populate the demo information to generate context automatically.</p>}
     {profile.populated && context.status === 'not_started' && <p className="profile-status">Context has not been generated.</p>}
@@ -142,7 +157,7 @@ export default function PersonPanel({ id, jobs, onClose, onChanged }: { id: stri
     <div className="panel-top"><span>PERSON DETAILS</span><button className="icon-button" aria-label="Close person details" onClick={onClose}>×</button></div>
     {!person && !error && <div className="panel-body" role="status"><h2 id="person-title">Loading person details…</h2></div>}
     {error && !person && <div className="panel-body" role="alert"><h2 id="person-title">Details unavailable</h2><p>{error}</p><button className="button" onClick={() => setAttempt(x=>x+1)}>Try again</button></div>}
-    {person && <div className="panel-body"><PersonAvatar person={person} large/><h2 id="person-title">{personName(person)}</h2><p className="panel-position">{position(person)}</p><div className="panel-score"><span>Score</span><strong>-</strong><small>Not calculated yet</small></div>
+    {person && <div className="panel-body"><PersonAvatar person={person} large/><h2 id="person-title">{personName(person)}</h2><p className="panel-position">{position(person)}</p>{demo?.risk_score ? <div className={`panel-score risk-${demo.risk_score.band}`}><span>Risk score</span><strong>{demo.risk_score.score.toFixed(1)}</strong><small>{readable(demo.risk_score.band)} · fictional demo</small></div> : <div className="panel-score"><span>Score</span><strong>-</strong><small>{demo ? 'Populate demo information to calculate' : 'Not calculated yet'}</small></div>}
       {error && <div className="action-error" role="alert">Unable to refresh details. Saved information remains visible. <button className="text-button" onClick={() => setAttempt(value => value + 1)}>Retry details</button></div>}
       <section className="additional-information" aria-labelledby="additional-information-title">
         <h3 id="additional-information-title">Additional information</h3>

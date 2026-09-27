@@ -149,3 +149,23 @@ The following entry predates the current setup. Its observations describe that e
 - **Verification:** Final live request returned HTTP 200 with 12 of 12 expected fictional findings accepted and network_verified=true. Eleven offline Gemini regression tests passed, covering configuration, one-request behaviour, quota/network errors, source validation, malformed/incomplete output, strict local constraints, thought exclusion, and production import isolation. git diff --check passed. Earlier diagnostic requests exposed the old-model 404, provider-schema 400, and output truncation before the final correction. No real employee information or Serper searches were used.
 - **Decisions:** User requested troubleshooting of the already-authorised live fictional evaluation. Retain a configurable model and one-request/no-retry behaviour; no automatic model fallback, new dependency, production model integration, or database change. Google currently lists a free tier for the selected model; account-specific future availability and quota remain provider-controlled.
 - **Remaining Issues:** Live success covers the built-in profile at verification time, not every model or future provider response. The fixture evaluator is separate from the real/demo database collection workflow. UI/database tests were not repeated because this repair changes only the standalone fixture client and its setup documentation.
+
+## UI-003 — Dark workspace and map visual emphasis
+
+- **Task ID:** UI-003
+- **Date:** 2026-09-27
+- **Work Completed:** Applied a high-contrast dark theme across the frontend, updated browser theme metadata, increased the map canvas height and contrast, strengthened the map frame and organisation node, and reduced the visual weight of the activity and discovery panels. Preserved existing responsive breakpoints, controls, selectors, and application behavior.
+- **Files Changed:** `frontend/src/styles.css`, `frontend/index.html`, `docs/COMPLETED.md`.
+- **Verification:** `npm run build --prefix frontend` passed. `npm test --prefix frontend` passed all 31 Playwright tests, including map rendering, desktop activity placement, responsive stacking, mobile overflow, loading, empty, error, enrichment, discovery, and profile workflows. Stylesheet diagnostics reported no errors. Visually reviewed `frontend/test-results/people-map.png`.
+- **Decisions:** User explicitly requested a dark theme everywhere and the map as the visual centerpiece. Used the existing dark green workspace direction and CSS architecture without adding dependencies or changing component behavior.
+- **Remaining Issues:** Cytoscape connector colors remain defined in `frontend/src/Graph.tsx` and were not changed because this task was scoped to the stylesheet; the dark canvas provides sufficient contrast for the existing connectors.
+
+## UI-004 — Left activity rail with central map
+
+- **Task ID:** UI-004
+- **Date:** 2026-09-27
+- **Work Completed:** Moved Recent activity into a narrow left rail on desktop and assigned the wider central/right column to the organisation map. Preserved the map-first stacking order on tablet and mobile screens.
+- **Files Changed:** `frontend/src/styles.css`, `frontend/tests/people.spec.ts`, `docs/UI.md`, `docs/COMPLETED.md`.
+- **Verification:** The focused activity placement test passed. The full frontend Playwright suite passed all 31 tests, including desktop left-rail placement, mobile stacking, and no horizontal overflow.
+- **Decisions:** User explicitly requested that the map become more central and Recent activity move to the left.
+- **Remaining Issues:** None known.

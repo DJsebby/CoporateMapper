@@ -8,7 +8,7 @@ const address: Finding = {...religion,id:'address-fact',category:'home_address',
 const base: PersonDetail = {id:'profile-1',names:['Arden Example — fictional'],job_titles:['Engineer'],organisations:['Fictional Studio'],image_urls:[],score:null,evidence_count:1,emails:[],telephones:[],profile_urls:[],same_as:[],evidence:[],findings:[],demo_profile:null}
 const allowance = {limit:5,used:0,remaining:5,provider_exhausted:false}
 function fixture(coverage: DemoProfile['coverage'] = 'full'): DemoProfile {
-  return {fixture_id:'authored-profile-1',name:'Arden Example',coverage,fictional:true,populated:false,findings:[],missing_categories:['business_email','interest','religion','home_address'],context:{status:'not_started'}}
+  return {fixture_id:'authored-profile-1',name:'Arden Example',coverage,fictional:true,populated:false,findings:[],missing_categories:['business_email','interest','religion','home_address'],context:{status:'not_started'},risk_score:null}
 }
 function makeJob(demo = false): EnrichmentJob {
   return {id:'profile-job',kind:demo ? 'demo_profile' : undefined,namespace:demo ? 'demo' : 'real',status:'running',created_at:'2026-09-27T00:00:00Z',updated_at:'2026-09-27T00:00:00Z',cancel_requested:false,search_attempts:demo ? 0 : 1,page_attempts:0,items:[{id:'profile-item',person_id:base.id,name:base.names[0],status:'running',stage:demo ? 'populating' : 'searching',search_attempts:demo ? 0 : 1,page_attempts:0,findings_count:0,candidates:[]}]}
@@ -76,10 +76,15 @@ test('fictional profile populates personal fixture facts and automatically shows
   await panel.getByRole('button',{name:'Populate demo information',exact:true}).click()
   expect(state.posts[0].path).toBe('/api/demo/profiles/profile-1/populate')
   expect(Object.keys(state.posts[0].body)).toEqual(['idempotency_key'])
-  state.detail.demo_profile = {...fixture(),populated:true,findings:[email,sport,religion,address],missing_categories:[],context:{status:'running'}}
+  state.detail.demo_profile = {...fixture(),populated:true,findings:[email,sport,religion,address],missing_categories:[],context:{status:'running'},
+    risk_score:{score:7.2,band:'high',factors:{age_bracket:'75+',gender:'female',digital_footprint_exposure:'high'},breakdown:{'person.age_bracket=75+':0.3,'person.digital_footprint_exposure=high':1.0}}}
   state.jobs[0] = {...state.jobs[0],updated_at:'2026-09-27T00:00:01Z',items:[{...state.jobs[0].items[0],stage:'gemini_context',findings_count:4,gemini_attempts:1}]}
   await expect(panel.getByRole('table')).toContainText(address.value,{timeout:7000})
   await expect(panel).toContainText('Generating Gemini context')
+  await expect(panel.locator('.panel-score')).toContainText('7.2')
+  await expect(panel.locator('.panel-score')).toContainText('high')
+  await expect(panel.locator('.panel-score')).toHaveClass(/risk-high/)
+  await expect(panel).toContainText('age bracket: 75+ (+0.3)')
   state.detail.demo_profile.context = {status:'completed',model:'gemini-fixture-model',summary:[{text:'The fictional profile lists cycling as an interest.',reason:'Included because interest is an explicit, sourced fact already present in this profile\'s table.',finding_ids:[sport.id]}],gaps:['No professional history is recorded.'],privacy_implications:[{text:'This fictional home address demonstrates how location details can expose personal privacy.',reason:'This applies because the table explicitly lists home address: 42 Imaginary Circuit, Exampleton (fictional).',finding_ids:[address.id]}],generated_at:'2026-09-27T00:00:02Z'}
   complete(state)
   await expect(panel.getByRole('heading',{name:'Profile summary',exact:true})).toBeVisible({timeout:7000})
