@@ -8,6 +8,8 @@ The [discovery-to-database pipeline](docs/PIPELINE.md), people extractor, local 
 
 The name-recon utility makes one Serper search API request and prints the response JSON; it does not scrape result pages. Configure `SERPER_API_KEY` in `.env`, install `requirements.txt`, then run `python test_name.py`.
 
+The generic Serper helper is `recon.generic.search(query)` and returns raw JSON. The current email example passes an address, which the helper searches as an exact quoted query.
+
 ## Repository documentation
 
 Agent instructions and supporting project documentation live in `docs/`. The root [AGENTS.md](AGENTS.md) directs agents to the full instructions.

@@ -48,3 +48,12 @@ Record only decisions explicitly approved by the CEO. A template is not a decisi
 - **Reason:** The CEO requested the smallest Python equivalent of the supplied HTTP client example.
 - **Approved By:** CEO, explicit request dated 2026-09-26.
 - **Consequences / Constraints:** Preserve the plain name/company/role query, top-10 request, and local `SERPER_API_KEY`; do not execute live searches during implementation.
+
+### DEC-005 — Quoted email lookup
+
+- **Decision ID:** DEC-005
+- **Date:** 2026-09-27
+- **Decision:** Add a Serper helper that searches a supplied email as an exact quoted query.
+- **Reason:** The CEO requested an email lookup matching the existing name helper.
+- **Approved By:** CEO, explicit request dated 2026-09-27.
+- **Consequences / Constraints:** Use the existing `SERPER_API_KEY`, request 10 results with Australia locale, and do not fetch result pages or perform a live query during implementation.
