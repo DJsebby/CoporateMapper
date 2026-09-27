@@ -1,0 +1,46 @@
+## Archives
+
+    Wayback machine
+    Archive.fo
+    WayBack Machine - Robots.txt
+
+    Pastebin - Pastebin.com
+    site:pastebin <company> <desired info>
+
+
+
+## Leaks
+
+  haveibeenpwned.com
+  dehashed.com
+  grayhatwarfare.com
+
+
+## Infrastructure = Domain / DNS
+
+Crt.sh
+
+
+
+Automation:
+
+
+## Archives
+
+    Wayback Machine: - Completed
+
+        Phase 1:
+            The CDX Server API: Gives you an index list of all captured files, their original URLs, and their unique timestamps (formatted as YYYYMMDDhhmmss).
+
+            The Wayback Download URL Structure: Once you have a timestamp and the original URL, you construct the direct file path using this format:
+            [https://web.archive.org/web/](https://web.archive.org/web/){timestamp}id_/{original_url}
+
+
+    WayBack Machine - Robots.txt: - Completed
+
+
+
+    haveibeenpwned.com - completed
+
+
+    Crt.sh

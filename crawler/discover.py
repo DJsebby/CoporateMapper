@@ -33,6 +33,19 @@ class WebsiteDiscoverer:
             user_agent=user_agent,
         )
 
+    def close(self) -> None:
+        """Close the HTTP sessions owned by this discoverer."""
+        try:
+            self.session.close()
+        finally:
+            self.sitemap_parser.session.close()
+
+    def __enter__(self) -> WebsiteDiscoverer:
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
     def discover(self, base_url: str) -> list[str]:
 
         base_url = self._normalise_base_url(base_url)
