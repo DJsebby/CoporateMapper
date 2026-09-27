@@ -1,4 +1,4 @@
-"""Read-only people API over the extractor's existing Neo4j evidence model.
+"""Local people and enrichment API over Neo4j evidence.
 
 The list response is paginated, but filtering currently scans evidence JSON in
 Python because organisations and names are not indexed graph properties.
@@ -10,13 +10,19 @@ import json
 import os
 from pathlib import Path
 from threading import Lock
-from typing import Any, Protocol
+from typing import Any, Protocol, Literal
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from neo4j import GraphDatabase
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
+
+from enrichment_policy import sanitize_record, validate_finding
+from enrichment_store import EnrichmentError
 
 
 class PersonSummary(BaseModel):
@@ -24,6 +30,7 @@ class PersonSummary(BaseModel):
     names: list[str]
     job_titles: list[str]
     organisations: list[str]
+    image_urls: list[str] = Field(default_factory=list)
     score: None = None
     evidence_count: int
 
@@ -34,6 +41,8 @@ class PersonDetail(PersonSummary):
     emails: list[str]
     telephones: list[str]
     evidence: list[dict[str, Any]]
+    findings: list[dict[str, Any]] = Field(default_factory=list)
+    demo_profile: dict[str, Any] | None = None
 
 
 class PeoplePage(BaseModel):
@@ -50,6 +59,31 @@ class Organisation(BaseModel):
 
 class OrganisationList(BaseModel):
     organisations: list[Organisation]
+
+
+class JobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    person_ids: list[str] = Field(min_length=1, max_length=20)
+    idempotency_key: str = Field(min_length=1, max_length=100)
+    search_again: bool = False
+
+
+class DemoProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idempotency_key: str = Field(min_length=1, max_length=100)
+
+
+class PipelineJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    website_url: str = Field(min_length=1, max_length=2048)
+    idempotency_key: str = Field(min_length=1, max_length=100)
+
+
+class ReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    candidate_id: str = Field(min_length=1, max_length=128)
+    decision: Literal["accept", "reject"]
+    australian_work_source: str | None = Field(default=None, max_length=2048)
 
 
 class PeopleStore(Protocol):
@@ -114,7 +148,7 @@ class Neo4jPeopleStore:
 
 
 _FIELDS = (
-    "names", "job_titles", "organisations", "profile_urls", "same_as", "emails", "telephones"
+    "names", "job_titles", "organisations", "profile_urls", "same_as", "emails", "telephones", "image_urls"
 )
 
 
@@ -124,6 +158,19 @@ def _text(value: Any) -> str:
 
 def _organisation_key(name: str) -> str:
     return _text(name).casefold()
+
+
+def _image_url(value: str) -> bool:
+    """Serve only usable HTTP(S) image references, including for older evidence."""
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+        return bool(parsed.scheme in {"http", "https"} and parsed.hostname
+                    and parsed.username is None and parsed.password is None
+                    and not any(character.isspace() or ord(character) < 32 or ord(character) == 127
+                                or character == "\\" for character in value))
+    except ValueError:
+        return False
 
 
 def _record_date(record):
@@ -142,10 +189,13 @@ def _reject_nonfinite(value):
     raise ValueError("Non-finite JSON number")
 
 
-def aggregate_people(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def aggregate_people(rows: list[dict[str, Any]], dismissed=None) -> list[dict[str, Any]]:
     """Union claims by identity while retaining original evidence and conflicts."""
+    dismissed = dismissed or {}
     grouped = {}
     for row in rows:
+        if not isinstance(row, dict):
+            continue
         identity_key = _text(row.get("id"))
         if not identity_key:
             continue
@@ -162,6 +212,19 @@ def aggregate_people(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 names = record.get("names")
                 if not isinstance(names, list) or not any(_text(name) for name in names):
                     continue
+                # Reject non-finite legacy JSON before discarding unapproved fields.
+                json.dumps(record, allow_nan=False)
+                record = sanitize_record(record)
+                if not record:
+                    continue
+                record["findings"] = [fact for fact in record.get("findings", [])
+                                      if fact["id"] not in dismissed.get(identity_key, set())]
+                # Dismissals must also disappear from the legacy summary aliases.
+                categories = {"role":"job_titles", "profile_url":"profile_urls", "portrait_url":"image_urls",
+                              "business_email":"emails", "business_phone":"telephones"}
+                for category, field in categories.items():
+                    record[field] = [fact["value"] for fact in record["findings"] if fact["category"] == category]
+                record["same_as"] = [url for url in record.get("same_as", []) if url in record["profile_urls"]]
                 canonical = json.dumps(record, sort_keys=True, ensure_ascii=False, allow_nan=False)
             except (ValueError, RecursionError):
                 continue
@@ -174,6 +237,11 @@ def aggregate_people(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             records.items(), key=lambda item: (_record_date(item[1]), item[0]), reverse=True
         )]
         person = {"id": identity_key, "score": None, "evidence_count": len(evidence), "evidence": evidence}
+        facts = {}
+        for record in evidence:
+            for fact in record.get("findings", []):
+                facts.setdefault(fact["id"], fact)
+        person["findings"] = list(facts.values())
         for field in _FIELDS:
             values = {}
             for record in evidence:
@@ -182,7 +250,7 @@ def aggregate_people(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     continue
                 for raw_value in raw_values:
                     value = _text(raw_value)
-                    if value:
+                    if value and (field != "image_urls" or _image_url(value)):
                         key = _organisation_key(value) if field == "organisations" else value
                         values.setdefault(key, value)
             person[field] = list(values.values())
@@ -192,21 +260,180 @@ def aggregate_people(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(people, key=lambda person: (person["names"][0].casefold(), person["id"]))
 
 
-def create_app(store: PeopleStore | None = None) -> FastAPI:
+def create_app(store: PeopleStore | None = None, enrichment=None, demo_profiles=None, pipeline_jobs=None) -> FastAPI:
     owned_store = store is None
     store = Neo4jPeopleStore() if store is None else store
 
+    if enrichment is None and owned_store:
+        from enrichment import EnrichmentEngine
+        from enrichment_store import Neo4jEnrichmentStore
+        enrichment_store = Neo4jEnrichmentStore(store._connection, store._database)
+        enrichment = EnrichmentEngine(enrichment_store, lambda identity: people(identity))
+    if demo_profiles is None and owned_store:
+        from demo_profile_workflow import DemoProfileWorkflow
+        from enrichment_store import Neo4jEnrichmentStore
+        demo_store = Neo4jEnrichmentStore(store._connection, store._database, namespace="demo")
+        demo_profiles = DemoProfileWorkflow(demo_store, enrichment._wake, enrichment._commands, enrichment._stop)
+    if enrichment is not None and demo_profiles is not None:
+        enrichment.demo_profiles = demo_profiles
+    if pipeline_jobs is None and owned_store:
+        from pipeline_jobs import Neo4jPipelineJobStore, PipelineJobs
+        pipeline_store = Neo4jPipelineJobStore(store._connection, store._database)
+        pipeline_jobs = PipelineJobs(pipeline_store)
+    available = {"ready": enrichment is not None, "error": ""}
+    pipeline_available = {"ready": pipeline_jobs is not None, "error": ""}
+
     @asynccontextmanager
     async def lifespan(app):
-        yield
-        if owned_store:
-            store.close()
+        if enrichment is not None:
+            try:
+                enrichment.start()
+            except Exception:
+                available["ready"] = False
+                available["error"] = "Enrichment is unavailable. Check Neo4j and ensure only one local API or enrichment command is running, then restart."
+        if pipeline_jobs is not None:
+            try:
+                pipeline_jobs.start()
+            except Exception:
+                pipeline_available["ready"] = False
+                pipeline_available["error"] = "Website discovery is unavailable. Check Neo4j and restart."
+        try:
+            yield
+        finally:
+            if pipeline_jobs is not None:
+                pipeline_jobs.close()
+            if enrichment is not None:
+                enrichment.close()
+            if owned_store:
+                store.close()
 
     app = FastAPI(title="CorporateMapper", lifespan=lifespan)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
+
+    @app.middleware("http")
+    async def local_only(request: Request, call_next):
+        host = request.client.host if request.client else ""
+        if host not in {"127.0.0.1", "::1", "testclient"}:
+            return JSONResponse({"detail":"This application is available on localhost only."}, status_code=403)
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            origin = request.headers.get("origin")
+            if origin and urlsplit(origin).hostname not in {"localhost", "127.0.0.1", "::1"}:
+                return JSONResponse({"detail":"Only local workspace requests are accepted."}, status_code=403)
+        return await call_next(request)
+
+    def service():
+        if enrichment is None or not available["ready"]:
+            raise HTTPException(503, available["error"] or "Enrichment is unavailable in this workspace.")
+        if enrichment.failure:
+            raise HTTPException(503, enrichment.failure)
+        return enrichment
+
+    def action(callback):
+        try:
+            return callback()
+        except KeyError:
+            raise HTTPException(404, "The requested job, candidate, or finding was not found.") from None
+        except EnrichmentError as exc:
+            raise HTTPException(409, str(exc)) from None
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(503, "Enrichment data is unavailable. Check the local database and retry.") from None
+
+    def pipeline_service():
+        if pipeline_jobs is None or not pipeline_available["ready"]:
+            raise HTTPException(503, pipeline_available["error"] or "Website discovery is unavailable in this workspace.")
+        if pipeline_jobs.failure:
+            raise HTTPException(503, pipeline_jobs.failure)
+        return pipeline_jobs
+
+    def pipeline_action(callback):
+        from pipeline_jobs import PipelineJobError
+        try:
+            return callback()
+        except KeyError:
+            raise HTTPException(404, "The requested discovery run was not found.") from None
+        except PipelineJobError as exc:
+            raise HTTPException(409, str(exc)) from None
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(503, "Website discovery data is unavailable. Check the local database and retry.") from None
+
+    @app.get("/api/pipeline/jobs")
+    def pipeline_jobs_list():
+        return pipeline_action(lambda: {"jobs": pipeline_service().store.list()})
+
+    @app.post("/api/pipeline/jobs", status_code=201)
+    def create_pipeline_job(body: PipelineJobRequest):
+        return pipeline_action(lambda: pipeline_service().create(body.website_url, body.idempotency_key))
+
+    @app.get("/api/pipeline/jobs/{job_id}")
+    def pipeline_job_detail(job_id: str):
+        job = pipeline_action(lambda: pipeline_service().store.get(job_id))
+        if not job:
+            raise HTTPException(404, "Discovery run not found.")
+        return job
+
+    from enrichment import job_public
+
+    @app.get("/api/enrichment/jobs")
+    def jobs():
+        worker = service()
+        return action(lambda: {"jobs":[job_public(job) for job in worker.store.list()[:100]],
+                              "allowance":worker.store.allowance(worker.allowance_limit)})
+
+    @app.post("/api/enrichment/jobs", status_code=201)
+    def create_job(body: JobRequest):
+        return action(lambda: job_public(service().create(body.person_ids, body.idempotency_key, body.search_again)))
+
+    @app.get("/api/enrichment/jobs/{job_id}")
+    def job_detail(job_id: str):
+        job = action(lambda: service().store.get(job_id))
+        if not job:
+            raise HTTPException(404, "Job not found.")
+        return job_public(job)
+
+    @app.post("/api/enrichment/jobs/{job_id}/cancel")
+    def cancel_job(job_id: str):
+        return action(lambda: job_public(service().cancel(job_id)))
+
+    @app.post("/api/enrichment/jobs/{job_id}/items/{item_id}/review")
+    def review_candidate(job_id: str, item_id: str, body: ReviewRequest):
+        return action(lambda: job_public(service().review(job_id, item_id, body.candidate_id,
+                                            body.decision, body.australian_work_source)))
+
+    def create_demo_action(identity_key, body, mode):
+        service()  # The same persistent worker must be available.
+        if demo_profiles is None:
+            raise HTTPException(503, "Fictional demo actions are unavailable in this workspace.")
+        if not any(person["id"] == identity_key for person in people(identity_key)):
+            raise HTTPException(404, "Person not found.")
+        return action(lambda: job_public(demo_profiles.create(identity_key, body.idempotency_key, mode)))
+
+    @app.post("/api/demo/profiles/{identity_key}/populate", status_code=201)
+    def populate_demo_profile(identity_key: str, body: DemoProfileRequest):
+        return create_demo_action(identity_key, body, "populate")
+
+    @app.post("/api/demo/profiles/{identity_key}/context", status_code=201)
+    def context_demo_profile(identity_key: str, body: DemoProfileRequest):
+        return create_demo_action(identity_key, body, "context")
+
+    @app.post("/api/people/{identity_key}/findings/{finding_id}/dismiss")
+    def dismiss_finding(identity_key: str, finding_id: str):
+        matches = people(identity_key)
+        if not any(f["id"] == finding_id for person in matches for f in person["findings"]):
+            raise HTTPException(404, "Finding not found.")
+        action(lambda: service().store.dismiss(identity_key, finding_id))
+        return {"dismissed":True}
 
     def people(identity_key=None):
         try:
-            return aggregate_people(store.read(identity_key))
+            dismissed = {}
+            if enrichment is not None:
+                for row in enrichment.store.dismissed(identity_key):
+                    dismissed.setdefault(row["person_id"], set()).add(row["finding_id"])
+            return aggregate_people(store.read(identity_key), dismissed)
         except Exception:
             # Database errors may contain addresses or credentials; never return them.
             raise HTTPException(status_code=503, detail="People data is unavailable. Check the local database connection and retry.") from None
@@ -257,6 +484,8 @@ def create_app(store: PeopleStore | None = None) -> FastAPI:
         matches = people(identity_key)
         for person in matches:
             if person["id"] == identity_key:
+                if demo_profiles is not None:
+                    person["demo_profile"] = action(lambda: demo_profiles.detail(identity_key))
                 return person
         raise HTTPException(status_code=404, detail="Person not found.")
 

@@ -1,6 +1,6 @@
 # People map
 
-The local UI displays people already stored by the extractor in Neo4j. It uses React, TypeScript, Cytoscape.js, and Tailwind, with a read-only FastAPI service. The UI itself inserts no data. Use the optional [demo command](DEMO.md) to load fictional people and remove them afterward.
+The local UI displays people already stored by the extractor in Neo4j. It uses React, TypeScript, Cytoscape.js, and Tailwind, with a local FastAPI service. The UI can create and review bounded enrichment jobs and dismiss individual findings. Use the optional [demo command](DEMO.md) to load fictional people and remove them afterward.
 
 ## Start the UI
 
@@ -32,22 +32,27 @@ Open the Vite URL shown in that terminal (normally <http://localhost:5173>). Req
 - Choose an organisation, all organisations, or people without a recorded organisation. The first available organisation is selected initially.
 - Search all people in that selection by name or position. Use pagination to reach every match; each page shows up to eight people to keep the map readable.
 - The map connects people to their recorded organisation. Connections do not represent reporting lines or management hierarchy. All-organisations and unassigned views show person nodes without invented relationships.
+- Person cards and details display stored portrait URLs when available, with initials when no usable image exists or an image fails to load. Images are references to their source websites; the application does not download an archive copy. Existing people gain portraits when their supported source pages are crawled again.
+- The Recent activity panel sits in a separate box to the right of the organisation map on desktop, and below it on smaller screens. It polls persisted Neo4j enrichment jobs every two seconds, showing source checks, search/page attempts, candidate review and cancellation.
 - Every person node shows a name, position, and score of `-`. Extraction confidence is not used as a person score. Missing positions are shown as unavailable.
-- Click **View details** to open the person's names, positions, organisations, contacts, profile links, and original source records. Different claims remain visible. Details have a shareable `#person/<identity>` URL and close with Escape or the close button.
+- Click **View details** to open the person's names, positions, organisations, business contacts, profile links, and typed findings with original source links. Different claims remain visible. Details have a shareable `#person/<identity>` URL and close with Escape or the close button.
 - Drag the graph background to pan; use zoom and Fit map controls. Switch to List for easier keyboard navigation. Small screens open in List by default.
-- Refresh reloads database records. An empty database shows an empty state; connection errors show a retry action.
+- Select up to 20 employees for enrichment. **Enrich selected** reuses eligible seven-day cached searches; **Search again** displays and consumes an additional allowance. Built-in demo runs use the CLI `enrich.py --demo`.
+- Refresh reloads database records and never starts a search. An empty database shows an empty state; connection errors show a retry action.
 
 Organisation names are grouped case-insensitively with normalised whitespace, without fuzzy entity resolution. Titles are collected from all of a person's evidence; no claim is made that a particular title belongs to a particular organisation. Outbound links are limited to HTTP/HTTPS; other URL values remain visible as text.
 
-## Read-only data interface
+## Data interface
 
 | Endpoint | Result |
 | --- | --- |
 | GET /api/organisations | Organisation names and distinct person counts; null name denotes unassigned people |
 | GET /api/people | Person summaries; optional organisation, unassigned, q, offset, and limit parameters |
-| GET /api/people/{identity_key} | Full aggregated person fields plus unchanged evidence records; 404 when missing |
+| GET /api/people/{identity_key} | Aggregated permitted fields, typed findings and minimized source metadata; 404 when missing |
 
-Responses always contain `score: null`; the UI displays `-`. The list limit defaults to 100 and is capped at 200. The UI requests eight summaries at a time; source records load only when opening details. Database failures return a generic 503 response. No write endpoints, migrations, authentication changes, or database constraints are added. Run this local tool bound to localhost as shown above.
+Person summaries and details include `image_urls`, an ordered list of distinct HTTP(S) image URLs from the person’s evidence (newest evidence first), or an empty list for older records without images. Invalid URLs and URLs containing credentials are excluded from this field; individual findings provide original source links and minimal permitted evidence. Arbitrary raw source JSON is not exposed.
+
+Responses always contain `score: null`; the UI displays `-`. The list limit defaults to 100 and is capped at 200. The UI requests eight summaries at a time; source records load only when opening details. Database failures return a generic 503 response. Enrichment creation/review/cancellation and finding-dismissal write endpoints are documented in [ENRICHMENT.md](ENRICHMENT.md). No shared deployment or employee authentication is included. Run this tool bound to localhost with one API process and without `--reload` or multiple workers.
 
 ## Scaling boundary
 

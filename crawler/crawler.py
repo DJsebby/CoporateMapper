@@ -91,9 +91,13 @@ class URLFetcher:
             href = (tag.get("href") or "").strip()
             if not href:
                 continue
+            try:
+                resolved_url = urljoin(final_url, href)
+            except ValueError:
+                continue  # One malformed link must not discard the rest of the page.
             links.append(
                 Link(
-                    url=urljoin(final_url, href),
+                    url=resolved_url,
                     text=tag.get_text(" ", strip=True),
                     rel=list(tag.get("rel", [])),
                 )
@@ -103,9 +107,13 @@ class URLFetcher:
         for tag in soup.find_all("img", src=True):
             src = (tag.get("src") or "").strip()
             if src:
+                try:
+                    resolved_url = urljoin(final_url, src)
+                except ValueError:
+                    continue  # Keep valid neighbouring people and image references.
                 images.append(
                     Image(
-                        url=urljoin(final_url, src),
+                        url=resolved_url,
                         alt=tag.get("alt"),
                     )
                 )

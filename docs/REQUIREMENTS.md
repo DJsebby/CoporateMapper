@@ -101,7 +101,7 @@ python test_name.py
 - Storage failures stop the run and expose partial outcomes without claiming an incomplete page was committed. Earlier page commits must remain explicit. URL priority and extraction confidence must never become the UI score.
 - Close owned HTTP resources on completion/failure and leave injected clients and Neo4j drivers caller-owned.
 - Provide an opt-in live Neo4j test with synthetic HTTP fixtures and UUID-isolated records, verify records are available through the people API, and remove only test data.
-- Run named modules (test_pipeline, test_extractor, test_staff_cards, test_api, test_demo). Existing tests/test_*.py files contain import-time external network requests and are manual checks, not offline regression suites. See [PIPELINE.md](PIPELINE.md) for commands and component limitations.
+- Run named modules (test_pipeline, test_extractor, test_staff_cards, test_api, test_demo). Existing tests/test_*.py files are main-guarded manual network checks, not offline regression suites; importing them does not issue requests. See [PIPELINE.md](PIPELINE.md) for commands and component limitations.
 
 ## HTML staff cards and click-to-email acceptance cases
 
@@ -112,3 +112,40 @@ python test_name.py
 - Require explicit card organisation fields or an exact match between structured organisation name and a team-page heading. A domain, unrelated organisation record, or generic 'Meet the team' heading alone must not establish membership.
 - Preserve stable source/name identities and separate evidence for repeated/conflicting entries. Verify parameterised repeat writes, pipeline handling of actual HTML through the crawler, and an opt-in live Neo4j/API round trip using isolated fictional records and scoped cleanup.
 - Run `.venv/bin/python -m unittest -v test_staff_cards` offline, or export the existing Neo4j settings and set `RUN_NEO4J_TESTS=1` for the live case. The original `test_extractor` module still needs only the standard library for offline tests. See [PIPELINE.md](PIPELINE.md) for supported layouts and limits.
+
+## Graceful failures, person images, and activity preview
+
+- Executable utilities must report failures concisely, avoid exposing credentials in exception text, return nonzero exit codes, and handle keyboard interruption. Importing manual runners must not contact external services.
+- Verify missing configuration/dependencies, network failures, malformed responses, and cleanup using offline doubles. Keep library exceptions observable so failures are not mistaken for successful empty results.
+- Extract only image URLs associated with supported person markup or the owning staff card. Cover relative URLs, ImageObject references, lazy images, malformed values, nested people/cards, and rejected non-HTTP or credential-bearing URLs.
+- Image fields must not alter person identity, extraction confidence, or no-image evidence. Verify the stored JSON through an opt-in live Neo4j round trip with unique fictional records and scoped cleanup.
+- API summaries and details expose deduplicated image URLs, newest evidence first. Existing records default to an empty list; corrupt image fields do not hide valid people.
+- Browser checks cover portraits, broken/unsafe-image fallback, network error recovery, responsive layout, and a clearly labelled static Recent activity preview visible in empty/error states. Activity must not imply a live Neo4j connection yet.
+
+Run the new offline suites alongside existing regression tests:
+
+```bash
+.venv/bin/python -m unittest -v test_cli test_images test_pipeline test_extractor test_staff_cards test_api test_demo
+npm run build --prefix frontend
+npm test --prefix frontend
+```
+
+Enable `RUN_NEO4J_TESTS=1` with exported local Neo4j settings to run the isolated database checks.
+
+## Australian enrichment and shared-demo acceptance cases
+
+- Real and demo providers run through the identical worker and structured evidence policy; the demo flag accepts only authored built-in fixtures. Real routes reject fictional/model overrides and make zero Gemini requests even with a configured key.
+- Verify quoted Australian searches, one attempt per employee/run, durable debit before requests, seven-day caches, explicit reruns, quotas, 15-page limits, private/redirect/robots controls, cancellation and interrupted-job recovery.
+- Verify employee-specific Australian workplace proof, original employer-link identity anchors, namesakes/external review isolation, source-backed facts, conflicting observations, personal/sensitive/raw-data exclusion and identity-scoped dismissals.
+- Keep Gemini's optional live fixture evaluation separate from offline mock tests. Never pass actual employee data to the model.
+- `test_enrichment`, `test_enrichment_review`, `test_enrichment_policy`, `test_enrichment_sources`, `test_public_company_sources`, and `test_gemini_fixture_eval` cover these paths; `test_enrichment` has an opt-in isolated Neo4j test. Frontend browser tests cover selection, review, workplace evidence, progress, cancellation, source links and dismissals. See [ENRICHMENT.md](ENRICHMENT.md).
+
+
+## Per-person population and fictional profile context
+
+- An explicit per-person click creates one idempotent enrichment request; polling/reopening never searches. The table updates from saved findings, shows missing values and retains provenance and pending review decisions.
+- Built-in fictional profiles vary in completeness. Synthetic sensitive examples stay outside the real evidence validator and collector; arbitrary identities, request bodies and modified stored fixture values must not enter Gemini.
+- Save fictional table data before the outbound model request and persist attempts before sending. Restart/cancellation never silently replays requests, and late cancelled responses are discarded.
+- Missing keys, provider quotas, malformed/unsupported context and transport failures leave the table available. Retry is explicit. Both context text and citations must match supported fixture options; missing fields must correspond to the populated subset.
+- Verify profile → job → Neo4j → context → API and browser flows with isolated fictional fixtures, including full and partial inputs. Real workflow tests keep a configured Gemini key and assert zero model calls.
+- Run `test_demo_profile_context` and `test_demo_profile_workflow` alongside the existing enrichment/Gemini regression suites; enable `RUN_NEO4J_TESTS=1` for isolated persistence checks. Browser tests cover real population, demo completeness, context progress/citations/failure/retry and responsive tables.

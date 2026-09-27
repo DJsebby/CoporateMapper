@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urljoin
 from xml.etree import ElementTree as ET
 
@@ -19,6 +19,7 @@ class SitemapResult:
     urls: list[str]
     sitemaps: list[str]
     failed_sitemaps: list[str]
+    missing_sitemaps: list[str] = field(default_factory=list)
 
 
 class SitemapParser:
@@ -41,6 +42,15 @@ class SitemapParser:
             }
         )
 
+    def close(self) -> None:
+        self.session.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
     def discover(self, sitemap_url: str) -> SitemapResult:
 
         sitemap_queue: deque[str] = deque([sitemap_url])
@@ -49,6 +59,7 @@ class SitemapParser:
         discovered_urls: set[str] = set()
 
         failed_sitemaps: list[str] = []
+        missing_sitemaps: list[str] = []
 
         while sitemap_queue:
             current_sitemap = sitemap_queue.popleft()
@@ -61,6 +72,7 @@ class SitemapParser:
                     "Maximum sitemap limit reached: %s",
                     self.max_sitemaps,
                 )
+                failed_sitemaps.append(current_sitemap)
                 break
 
             visited_sitemaps.add(current_sitemap)
@@ -70,11 +82,13 @@ class SitemapParser:
                 parsed = self._parse(xml, current_sitemap)
 
             except Exception as exc:
-                logger.warning(
-                    "Failed to process sitemap %s: %s",
-                    current_sitemap,
-                    exc,
-                )
+                if isinstance(exc, requests.HTTPError) and exc.response is not None and exc.response.status_code == 404:
+                    missing_sitemaps.append(current_sitemap)
+                else:
+                    logger.warning(
+                        "Failed to process a sitemap (%s); discovery may be incomplete.",
+                        type(exc).__name__,
+                    )
                 failed_sitemaps.append(current_sitemap)
                 continue
 
@@ -91,6 +105,7 @@ class SitemapParser:
             urls=sorted(discovered_urls),
             sitemaps=sorted(visited_sitemaps),
             failed_sitemaps=failed_sitemaps,
+            missing_sitemaps=missing_sitemaps,
         )
 
     def _fetch(self, sitemap_url: str) -> bytes:
@@ -101,9 +116,11 @@ class SitemapParser:
             timeout=self.timeout,
         )
 
-        response.raise_for_status()
-
-        return response.content
+        try:
+            response.raise_for_status()
+            return response.content
+        finally:
+            response.close()
 
     def _parse(
         self,
@@ -198,4 +215,5 @@ def discover_sitemap_urls(
         max_sitemaps=max_sitemaps,
     )
 
-    return parser.discover(sitemap_url)
+    with parser:
+        return parser.discover(sitemap_url)

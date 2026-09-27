@@ -22,6 +22,8 @@ class RobotsResult:
 
     failed: list[str] = field(default_factory=list)
 
+    missing: list[str] = field(default_factory=list)
+
 
 class RobotsParser:
 
@@ -42,6 +44,7 @@ class RobotsParser:
             robots_url=robots_url,
         )
 
+        response = None
         try:
             response = requests.get(
                 robots_url,
@@ -52,13 +55,19 @@ class RobotsParser:
             )
 
             response.raise_for_status()
+            text = response.text
 
         except requests.RequestException:
             result.failed.append(robots_url)
+            if response is not None and response.status_code == 404:
+                result.missing.append(robots_url)
             return result
+        finally:
+            if response is not None:
+                response.close()
 
         self._parse(
-            response.text,
+            text,
             base_url,
             result,
         )

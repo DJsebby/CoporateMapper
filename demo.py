@@ -10,6 +10,7 @@ from hashlib import sha256
 import json
 import re
 
+from cli_support import CommandError, cli_entrypoint
 from crawler.models import PageDocument
 from database import connected_extractor
 from extractor import Extractor
@@ -97,7 +98,7 @@ def seed_demo(driver, database='neo4j', dataset=DEMO_DATASET):
         ''', person_keys=[r['identity_key'] for r in rows],
             evidence_keys=[r['evidence_key'] for r in rows], dataset=dataset).single()['count']
         if collisions:
-            raise ValueError('Demo IDs already exist without this demo ownership marker; nothing was changed.')
+            raise CommandError('Demo IDs already exist without this demo ownership marker; nothing was changed.')
         tx.run('''
             UNWIND $rows AS row
             MERGE (p:Person {identity_key: row.identity_key})
@@ -159,6 +160,7 @@ def delete_demo(driver, database='neo4j', dataset=DEMO_DATASET):
         return session.execute_write(remove)
 
 
+@cli_entrypoint('Demo', hint='Check Neo4j settings and service availability. The current demo transaction was not confirmed.')
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--delete', action='store_true', help='Remove only owned demo records; preserve all unrelated data.')
@@ -176,4 +178,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

@@ -4,6 +4,7 @@ import requests
 import argparse
 
 def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampled_site"):
+    import requests
     cdx_api_url = "https://web.archive.org/cdx/search/cdx"
 
     # Parameters for the CDX API query (sorted chronologically by default)
@@ -98,7 +99,8 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
         try:
             print(f"[+] Downloading: {original_url} (Timestamp: {timestamp})")
             file_res = requests.get(archive_file_url, timeout=15)
-            if file_res.status_code == 200:
+            try:
+                file_res.raise_for_status()
                 with open(local_filepath, "wb") as f:
                     f.write(file_res.content)
                 downloaded_files.append(local_filepath)
@@ -109,6 +111,8 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
 
         time.sleep(1.0)
 
+    if failures:
+        raise CommandError(f"{failures} archived downloads failed. Earlier successful files have been saved.")
     print(f"\n[*] Done! Sampled files saved to folder: '{output_dir}'")
     return downloaded_files
 

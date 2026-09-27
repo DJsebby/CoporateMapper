@@ -45,3 +45,7 @@ RUN_NEO4J_TESTS=1 .venv/bin/python -m unittest -v test_demo
 ```
 
 Four offline cases check deterministic fictional fixtures, isolated namespaces, and CLI flags. Four opt-in live cases verify repeated seeds, full/scoped cleanup, unrelated records, extra evidence, shared evidence, edited records, and ownership collisions. Tests use unique namespaces and clean up only their own records; the default demo remains available in the UI.
+
+## Exercise the shared enrichment pipeline
+
+With the API stopped, run `.venv/bin/python enrich.py --demo`. This uses the same engine, validation, review, job progress and Neo4j writes as real collection, with offline responses from authored copies of these same 17 fixtures. The original fixture IDs/cleanup fingerprints remain unchanged. See [ENRICHMENT.md](ENRICHMENT.md) for startup, expected pending reviews and optional fictional-only Gemini evaluation. Enrichment adds separately sourced evidence, so the original `demo.py --delete` conservatively retains enriched people with those additional links.
