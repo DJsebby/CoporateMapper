@@ -6,6 +6,8 @@ CorporateMapper is a defensive cybersecurity / OSINT platform intended to map an
 
 The [discovery-to-database pipeline](docs/PIPELINE.md), people extractor, local Neo4j connection, and read-only [people map UI](docs/UI.md) are available. See the [Neo4j setup walkthrough](docs/NEO4J.md) to start the database and connect crawler output. The [technology stack](docs/ARCHITECTURE.md) is approved. Detailed architecture, data models, APIs, collection methods, risk scoring, hosting, and deployment design remain pending CEO approval. Celery versus RQ remains undecided.
 
+The name-recon utility makes one Serper search API request and prints the response JSON; it does not scrape result pages. Configure `SERPER_API_KEY` in `.env`, install `requirements.txt`, then run `python test_name.py`.
+
 ## Repository documentation
 
 Agent instructions and supporting project documentation live in `docs/`. The root [AGENTS.md](AGENTS.md) directs agents to the full instructions.

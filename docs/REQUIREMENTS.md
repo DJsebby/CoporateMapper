@@ -75,6 +75,16 @@ npm test
 
 Playwright starts a temporary frontend server on port 5174. Tests use synthetic API fixtures and include a screenshot for visual review in ignored frontend/test-results/. Enable the existing RUN_NEO4J_TESTS flag for live extractor and extractor-to-API verification as described above. The combined Python suite contains 26 cases (24 offline and two opt-in live cases); the browser suite contains seven cases.
 
+## Serper manual query
+
+`test_name.py` sends one live query using the name, company, and role configured in the file, then prints Serper's raw response JSON. It requires `SERPER_API_KEY` in local `.env` or the process environment, network access, and consumes one Serper query credit. Run it only when you intend to make that request.
+
+In PowerShell, run:
+
+```powershell
+python test_name.py
+```
+
 ## Demo seed and cleanup acceptance cases
 
 - Demo fixtures must be fictional, deterministic, and clearly labelled, with stable IDs/evidence timestamps so repeated runs do not add duplicates.
