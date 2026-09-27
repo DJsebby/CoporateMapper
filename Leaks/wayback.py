@@ -1,13 +1,7 @@
 import os
 import time
-
-from pathlib import Path
-import sys
-
-if __package__ in {None, ''}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from cli_support import CommandError, cli_entrypoint
+import requests
+import argparse
 
 def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampled_site"):
     import requests
@@ -22,17 +16,16 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
     }
 
     print(f"[*] Querying Wayback Machine index for: {domain}...")
-    response = requests.get(cdx_api_url, params=params, timeout=15)
-    try:
-        response.raise_for_status()
-        data = response.json()
-    finally:
-        response.close()
-    if not isinstance(data, list) or any(not isinstance(row, list) for row in data):
-        raise CommandError('Wayback returned an unexpected index response. Try again later.')
+    response = requests.get(cdx_api_url, params=params)
+
+    if response.status_code != 200:
+        print(f"[!] Error fetching CDX index: {response.status_code}")
+        return []
+
+    data = response.json()
     if len(data) <= 1:
         print("[!] No archived records found for this domain.")
-        return
+        return []
 
     headers = data[0]
     rows = data[1:]
@@ -53,7 +46,7 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
 
     if not valid_rows:
         print("[!] No non-image records found.")
-        return
+        return []
 
     print(f"[*] Non-image records available: {len(valid_rows)}")
 
@@ -77,7 +70,7 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
 
     os.makedirs(output_dir, exist_ok=True)
 
-    failures = 0
+    downloaded_files = []
     for row_dict in selected_rows:
         timestamp = row_dict['timestamp']
         original_url = row_dict['original']
@@ -110,22 +103,34 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
                 file_res.raise_for_status()
                 with open(local_filepath, "wb") as f:
                     f.write(file_res.content)
-            finally:
-                file_res.close()
-        except (requests.RequestException, OSError):
-            failures += 1
-            print('[-] An archived asset could not be downloaded or saved.', file=sys.stderr)
+                downloaded_files.append(local_filepath)
+            else:
+                print(f"[-] Failed to fetch asset. Status: {file_res.status_code}")
+        except Exception as e:
+            print(f"[-] Error downloading {original_url}: {e}")
 
         time.sleep(1.0)
 
     if failures:
         raise CommandError(f"{failures} archived downloads failed. Earlier successful files have been saved.")
     print(f"\n[*] Done! Sampled files saved to folder: '{output_dir}'")
-
-@cli_entrypoint('Wayback download')
-def main():
-    fetch_sampled_wayback_site('www.ahsca.org.au', sample_count=2)
+    return downloaded_files
 
 
-if __name__ == '__main__':
-    raise SystemExit(main())
+class WaybackSearch:
+    def __init__(self, website):
+        self.website = website.strip().rstrip("/")
+        if not self.website:
+            raise ValueError("website must not be empty")
+
+    def fetch(self, sample_count=2, output_dir="wayback_sampled_site"):
+        return fetch_sampled_wayback_site(self.website, sample_count, output_dir)
+
+# Example usage:
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Fetch sampled Wayback snapshots.")
+    parser.add_argument("website", help="Website domain or URL to archive")
+    parser.add_argument("--sample-count", type=int, default=2)
+    parser.add_argument("--output-dir", default="wayback_sampled_site")
+    args = parser.parse_args()
+    WaybackSearch(args.website).fetch(args.sample_count, args.output_dir)

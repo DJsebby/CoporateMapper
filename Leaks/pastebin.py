@@ -1,3 +1,4 @@
+import argparse
 import time
 import random
 from urllib.parse import quote_plus
@@ -87,10 +88,23 @@ def run_bulletproof_dork(company_name):
     if failed:
         raise CommandError("Search incomplete. Any earlier matching URLs have been saved; try again later.")
 
-@cli_entrypoint('Paste search')
-def main():
-    run_bulletproof_dork('ahcsa.org.au')
+    return sorted(collected_urls)
 
 
-if __name__ == '__main__':
-    raise SystemExit(main())
+class PastebinSearch:
+    def __init__(self, website):
+        self.website = website.strip()
+        if not self.website:
+            raise ValueError("website must not be empty")
+
+    def search(self):
+        return run_bulletproof_dork(self.website)
+
+# ==========================================
+# CHANGE YOUR TARGET COMPANY HERE:
+# ==========================================
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Search Pastebin links for a website.")
+    parser.add_argument("website", help="Company name or domain to search")
+    args = parser.parse_args()
+    PastebinSearch(args.website).search()

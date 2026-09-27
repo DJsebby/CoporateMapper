@@ -1,58 +1,61 @@
-"""Manual Certificate Transparency lookup."""
+import argparse
 
-from pathlib import Path
-import sys
-
-if __package__ in {None, ''}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from cli_support import CommandError, cli_entrypoint
+import requests
 
 
-def fetch_crtsh_subdomains(domain, output_file=None):
-    import requests
+class CrtShSearch:
+    def __init__(self, domain: str) -> None:
+        self.domain = domain.strip().lower().strip(".")
+        if not self.domain:
+            raise ValueError("domain must not be empty")
 
-    print(f'[*] Querying Certificate Transparency logs on crt.sh for: {domain}...')
-    response = requests.get(
-        'https://crt.sh/', params={'q': f'%.{domain}', 'output': 'json'},
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}, timeout=30,
-    )
-    try:
-        response.raise_for_status()
-        data = response.json()
-    finally:
-        response.close()
-    if not isinstance(data, list) or any(not isinstance(entry, dict) for entry in data):
-        raise CommandError('crt.sh returned an unexpected response. Try again later.')
-    subdomains = set()
-    for entry in data:
-        name_value = entry.get('name_value', '')
-        if not isinstance(name_value, str):
-            raise CommandError('crt.sh returned an invalid certificate name. Try again later.')
-        for sub in name_value.splitlines():
-            sub = sub.strip().lower().removeprefix('*.')
-            if sub:
-                subdomains.add(sub)
-    results = sorted(subdomains)
-    print(f'[+] Success! Found {len(results)} unique subdomains.')
-    if output_file and results:
-        with open(output_file, 'w', encoding='utf-8') as output:
-            output.write('\n'.join(results) + '\n')
-        print(f"[*] Results successfully saved to: '{output_file}'")
-    return results
+    def fetch_subdomains(self, output_file: str | None = None) -> list[str]:
+        response = requests.get(
+            "https://crt.sh/",
+            params={"q": f"%.{self.domain}", "output": "json"},
+            headers={"User-Agent": "CorporateMapper/1.0"},
+            timeout=30,
+        )
+        if response.status_code != 200:
+            return []
 
+        try:
+            entries = response.json()
+        except ValueError:
+            return []
 
-@cli_entrypoint('Certificate lookup')
-def main():
-    target_domain = 'ahcsa.org.au'
-    results = fetch_crtsh_subdomains(target_domain, f"{target_domain.replace('.', '_')}_subdomains.txt")
-    if results:
-        print('\n--- Preview of Subdomains ---')
-        for subdomain in results[:15]:
-            print(f'  - {subdomain}')
-        if len(results) > 15:
-            print(f'  ... and {len(results) - 15} more.')
+        subdomains = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for name in entry.get("name_value", "").splitlines():
+                name = name.strip().lower()
+                if name.startswith("*."):
+                    name = name[2:]
+                if name:
+                    subdomains.add(name)
+
+        results = sorted(subdomains)
+        if output_file and results:
+            with open(output_file, "w", encoding="utf-8") as output:
+                output.write("\n".join(results) + "\n")
+        return results
 
 
-if __name__ == '__main__':
-    raise SystemExit(main())
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Search crt.sh for a domain.")
+    parser.add_argument("domain", help="Root domain to search, e.g. example.com")
+    parser.add_argument("--output", help="Optional file to save the results")
+    args = parser.parse_args()
+
+    search = CrtShSearch(args.domain)
+    results = search.fetch_subdomains(args.output)
+    print(f"Found {len(results)} unique names for {search.domain}.")
+    for name in results[:15]:
+        print(name)
+    if len(results) > 15:
+        print(f"... and {len(results) - 15} more")
+
+
+if __name__ == "__main__":
+    main()
