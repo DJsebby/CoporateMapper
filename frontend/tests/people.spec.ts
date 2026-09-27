@@ -205,14 +205,15 @@ for (const failure of ['network', 'invalid JSON']) {
 }
 
 
-test('activity panel sits beside the map on desktop and below it on smaller screens', async ({page}) => {
+test('activity panel sits to the left of the map on desktop and below it on smaller screens', async ({page}) => {
   await page.goto('/')
   await expect(page.locator('.organisation-node')).toBeVisible()
   const directory = page.getByRole('region', {name:'People directory'})
   const activity = page.getByRole('region', {name:'Recent activity'})
   const mapBounds = (await directory.boundingBox())!
   const activityBounds = (await activity.boundingBox())!
-  expect(activityBounds.x).toBeGreaterThan(mapBounds.x + mapBounds.width)
+  expect(activityBounds.x + activityBounds.width).toBeLessThanOrEqual(mapBounds.x)
+  expect(activityBounds.y + activityBounds.height).toBeGreaterThanOrEqual(mapBounds.y + mapBounds.height - 2)
   expect(Math.abs(activityBounds.y - mapBounds.y)).toBeLessThan(2)
   const entries = activity.getByRole('listitem')
   const first = (await entries.nth(0).boundingBox())!
