@@ -214,7 +214,7 @@ def main(argv=None):
             print(f"Refreshed: removed {result['dataset_nodes_deleted']} base demo nodes, "
                   f"{result['enrichment_evidence_deleted']} enrichment evidence records and {result['jobs_deleted']} demo jobs. "
                   f"Reseeded {result['people']} fictional people.")
-            print('Run `.venv/bin/python enrich.py --demo` next to repopulate skills, qualifications and other enrichment findings.')
+            print('Run `.venv/bin/python app/enrich.py --demo` next to repopulate skills, qualifications and other enrichment findings.')
         else:
             result = seed_demo(extractor.driver, extractor.database)
             print(f"Demo ready: {result['people']} fictional people. Re-running does not duplicate them.")

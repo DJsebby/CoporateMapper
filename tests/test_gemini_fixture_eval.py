@@ -157,7 +157,7 @@ class GeminiFixtureTests(unittest.TestCase):
 
     def test_production_source_modules_do_not_import_gemini(self):
         for filename in ['enrichment_sources.py', 'enrichment_demo.py', 'enrichment_policy.py', 'api.py', 'pipeline.py']:
-            tree = ast.parse(Path(filename).read_text())
+            tree = ast.parse((Path(__file__).resolve().parent.parent / 'app' / filename).read_text())
             imported = [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
             imported += [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
             self.assertFalse(any('gemini' in (module or '').lower() for module in imported), filename)

@@ -173,7 +173,7 @@ class EnrichmentEngine:
             from demo import demo_rows
             fixture_ids = {row["identity_key"] for row in demo_rows()}
             if fixture_ids.intersection(person_ids):
-                raise EnrichmentError("Built-in demo employees use the offline command: python enrich.py --demo (or --demo --search-again).")
+                raise EnrichmentError("Built-in demo employees use the offline command: python app/enrich.py --demo (or --demo --search-again).")
         with self._commands:
             # A retry with the same key returns the original result, even if still active.
             for existing in self.store.list():

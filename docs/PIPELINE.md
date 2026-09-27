@@ -22,7 +22,7 @@ From the repository root, with Neo4j running:
 set -a
 source .env
 set +a
-.venv/bin/python pipeline.py https://example.com --max-pages 20
+.venv/bin/python app/pipeline.py https://example.com --max-pages 20
 ```
 
 Replace example.com with the website you intend to process. The integrated CLI verifies Neo4j connectivity before starting discovery. Refresh the [people UI](UI.md) after a run to see stored records. Discovery still starts from the website URL you supply.
@@ -101,13 +101,13 @@ This records a source-provided portrait association; it does not detect faces or
 Run the new offline tests:
 
 ```bash
-.venv/bin/python -m unittest -v test_pipeline test_staff_cards test_public_company_sources
+PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_pipeline test_staff_cards test_public_company_sources
 ```
 
 Run named regression suites, including the opt-in live Neo4j checks:
 
 ```bash
-RUN_NEO4J_TESTS=1 .venv/bin/python -m unittest -v test_pipeline test_extractor test_staff_cards test_api test_demo
+RUN_NEO4J_TESTS=1 PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_pipeline test_extractor test_staff_cards test_api test_demo
 ```
 
 Live pipeline tests still use simulated HTTP with real discovery/parsing/crawling/extraction, write only UUID-isolated fictional records, verify those records through the UI API, and clean them up. No third-party site is contacted.

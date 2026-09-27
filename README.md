@@ -21,10 +21,10 @@ npm install --prefix frontend
 npm run build --prefix frontend
 
 set -a; source .env; set +a
-.venv/bin/python demo.py --refresh
-.venv/bin/python enrich.py --demo
+.venv/bin/python app/demo.py --refresh
+.venv/bin/python app/enrich.py --demo
 
-.venv/bin/python -m uvicorn api:app --host 127.0.0.1 --port 8000
+.venv/bin/python -m uvicorn api:app --app-dir app --host 127.0.0.1 --port 8000
 
 Then open http://127.0.0.1:8000 in your browser. Keep that last command running.
 
@@ -72,3 +72,4 @@ back-end neo4j inserts
 
 a lot of other stuff 
 
+testing files - all ai

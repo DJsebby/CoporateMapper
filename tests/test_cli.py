@@ -19,8 +19,15 @@ from crawler.discover import WebsiteDiscoverer
 from crawler.sitemap import SitemapParser
 from pipeline import PipelineResult, PageResult, PipelineError
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 SECRET = 'fictional-secret-do-not-print'
+# These predate the automated unittest suite that now also lives in tests/ and
+# follow a different convention (a callable `main`, safe standalone CLI
+# execution); the checks below were calibrated for exactly these, not for the
+# unittest-style test_*.py files sitting alongside them.
+MANUAL_SCRIPTS = [ROOT / 'tests' / name for name in (
+    'test_crawler.py', 'test_discover.py', 'test_prioritiser.py', 'test_robots.py', 'test_sitemap.py',
+)]
 
 
 def response(status=200, text='', data=None):
@@ -138,7 +145,7 @@ class CommandTests(unittest.TestCase):
         self.assertNotIn(SECRET, err)
 
     def test_manual_modules_have_no_import_time_requests_or_optional_browser_import(self):
-        paths = sorted((ROOT / 'tests').glob('test_*.py')) + sorted((ROOT / 'Leaks').glob('*.py')) + [ROOT / 'test_name.py', ROOT / 'recon/name.py']
+        paths = MANUAL_SCRIPTS + sorted((ROOT / 'Leaks').glob('*.py')) + [ROOT / 'recon/name.py']
         with patch('requests.sessions.Session.request', side_effect=AssertionError('Network used during import')) as request, patch('http.client.HTTPSConnection.request', side_effect=AssertionError('Network used during import')) as https:
             for path in paths:
                 with self.subTest(script=path.name), patch.object(sys, 'path', sys.path[:]):
@@ -148,8 +155,8 @@ class CommandTests(unittest.TestCase):
             https.assert_not_called()
 
     def test_direct_scripts_handle_missing_dependencies_from_another_directory(self):
-        paths = [ROOT / name for name in ('database.py', 'demo.py', 'pipeline.py', 'test_name.py')]
-        paths += sorted((ROOT / 'tests').glob('test_*.py')) + sorted((ROOT / 'Leaks').glob('*.py'))
+        paths = [ROOT / 'app' / name for name in ('database.py', 'demo.py', 'pipeline.py')]
+        paths += MANUAL_SCRIPTS + sorted((ROOT / 'Leaks').glob('*.py'))
         env = {key: value for key, value in os.environ.items() if key not in {'PYTHONPATH', 'PYTHONHOME', 'SERPER_API_KEY', 'NEO4J_PASSWORD'}}
         env['NEO4J_PASSWORD'] = SECRET
         with TemporaryDirectory() as directory:

@@ -4,7 +4,7 @@ import sys
 if __package__ in {None, ''}:
     # recon/email.py must not shadow the standard-library email package.
     script_directory = Path(__file__).resolve().parent
-    sys.path[:] = [str(script_directory.parent)] + [
+    sys.path[:] = [str(script_directory.parent / 'app')] + [
         entry for entry in sys.path if Path(entry).resolve() != script_directory
     ]
 

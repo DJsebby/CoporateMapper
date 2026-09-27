@@ -1,7 +1,7 @@
 """Connect website discovery, URL prioritisation, crawling and person storage.
 
 Run from the repository root after exporting the Neo4j settings in .env:
-    .venv/bin/python pipeline.py https://example.com --max-pages 20
+    .venv/bin/python app/pipeline.py https://example.com --max-pages 20
 
 The page budget limits selected content fetch attempts. Public-only discovery
 reads one entry page and at most ten sitemaps (500 candidate URLs), plus robots
