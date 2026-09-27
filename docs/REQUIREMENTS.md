@@ -92,3 +92,23 @@ python test_name.py
 - Cleanup must require exact fixture IDs and explicit ownership markers. It must preserve unrelated nodes/relationships, non-demo evidence attached to demo people, shared evidence, and edited evidence. Repeated cleanup must be safe.
 - Seeding must refuse unowned ID collisions before making changes. Live tests must use unique test namespaces so they cannot delete the visible demo or user data.
 - Run .venv/bin/python -m unittest -v test_demo for four offline cases (four live cases skipped), or enable RUN_NEO4J_TESTS=1 for all eight. See [DEMO.md](DEMO.md) for usage.
+
+## Discovery-to-database pipeline acceptance cases
+
+- Exercise actual WebsiteDiscoverer, robots/sitemap parsers, Prioritiser, URLFetcher, and Extractor together with isolated HTTP fixtures; assert stored person fields, organisation, confidence, and provenance rather than only call counts.
+- Rank once, crawl in priority order, apply inclusive score bounds and a page-attempt limit, deduplicate fragment variants, and ignore invalid/non-HTTP candidates.
+- Empty discovery, no eligible URLs, failed fetches, unsupported responses, and pages without supported person markup or staff cards must not produce person writes. Empty discovery is inconclusive when upstream errors are suppressed.
+- Storage failures stop the run and expose partial outcomes without claiming an incomplete page was committed. Earlier page commits must remain explicit. URL priority and extraction confidence must never become the UI score.
+- Close owned HTTP resources on completion/failure and leave injected clients and Neo4j drivers caller-owned.
+- Provide an opt-in live Neo4j test with synthetic HTTP fixtures and UUID-isolated records, verify records are available through the people API, and remove only test data.
+- Run named modules (test_pipeline, test_extractor, test_staff_cards, test_api, test_demo). Existing tests/test_*.py files contain import-time external network requests and are manual checks, not offline regression suites. See [PIPELINE.md](PIPELINE.md) for commands and component limitations.
+
+## HTML staff cards and click-to-email acceptance cases
+
+- Use fictional cards matching the reported Adelaide BMW layout and other explicitly supported staff-card classes. Assert names, roles, explicit organisations/profiles, exact completeness scores, source locations, and the `html-staff-card` method; never label inferred HTML records as Schema.org markup.
+- Keep fields within the owning card. Exclude footer contacts, nested staff cards, nested microdata people, image-alt names, phone numbers in job titles, and arbitrary links as profile identities. Existing microdata people must not be duplicated by the staff-card adapter.
+- Normalise mailto recipients, percent encoding, multiple recipients, and duplicate addresses. Ignore empty links, `mailto:#`, malformed addresses, and subject/CC/BCC parameters; never invent missing email addresses.
+- Decode Joomla literal concatenations only when their constructed mailto link targets a matching cloak element in the same card. Cover entity semicolons, escaped quotes, multiline rendering, comments, unsupported reassignment/control flow, malformed escapes, and valid neighbouring cards. Never execute page JavaScript.
+- Require explicit card organisation fields or an exact match between structured organisation name and a team-page heading. A domain, unrelated organisation record, or generic 'Meet the team' heading alone must not establish membership.
+- Preserve stable source/name identities and separate evidence for repeated/conflicting entries. Verify parameterised repeat writes, pipeline handling of actual HTML through the crawler, and an opt-in live Neo4j/API round trip using isolated fictional records and scoped cleanup.
+- Run `.venv/bin/python -m unittest -v test_staff_cards` offline, or export the existing Neo4j settings and set `RUN_NEO4J_TESTS=1` for the live case. The original `test_extractor` module still needs only the standard library for offline tests. See [PIPELINE.md](PIPELINE.md) for supported layouts and limits.
