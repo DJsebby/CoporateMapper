@@ -32,7 +32,7 @@ python3 -m venv .venv
 set -a
 source .env
 set +a
-.venv/bin/python database.py
+.venv/bin/python app/database.py
 ```
 
 Expected output: `Neo4j connection verified; extractor is ready.` Compose loads `.env` automatically; Python reads exported environment variables, so source `.env` in each new terminal before running the connection helper.

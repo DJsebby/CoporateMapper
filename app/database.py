@@ -1,6 +1,6 @@
 """Connect the extractor to Neo4j using environment variables.
 
-Run ``python database.py`` to check authentication and database access.
+Run ``python app/database.py`` to check authentication and database access.
 The context manager closes the driver after the extractor is finished.
 """
 

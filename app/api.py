@@ -513,7 +513,7 @@ def create_app(store: PeopleStore | None = None, enrichment=None, demo_profiles=
                 return person
         raise HTTPException(status_code=404, detail="Person not found.")
 
-    frontend = Path(__file__).resolve().parent / "frontend" / "dist"
+    frontend = Path(__file__).resolve().parent.parent / "frontend" / "dist"
     if (frontend / "index.html").is_file():
         app.mount("/assets", StaticFiles(directory=frontend / "assets"), name="assets")
 

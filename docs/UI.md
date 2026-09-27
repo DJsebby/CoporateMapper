@@ -14,7 +14,7 @@ docker compose up -d
 set -a
 source .env
 set +a
-.venv/bin/python -m uvicorn api:app --host 127.0.0.1 --port 8000
+.venv/bin/python -m uvicorn api:app --app-dir app --host 127.0.0.1 --port 8000
 ```
 
 Open <http://localhost:8000>. Keep the terminal running; Ctrl+C stops the UI/API but leaves Neo4j running. Build before starting the API so it can serve frontend/dist. See [NEO4J.md](NEO4J.md) if this is a fresh checkout or your database credentials need configuring. Node.js 20.19+ or 22.12+ is needed for the frontend tooling.
@@ -37,7 +37,7 @@ Open the Vite URL shown in that terminal (normally <http://localhost:5173>). Req
 - Every person node shows a name, position, and score of `-`. Extraction confidence is not used as a person score. Missing positions are shown as unavailable.
 - Click **View details** to open the person's names, positions, organisations, business contacts, profile links, and typed findings with original source links. Different claims remain visible. Details have a shareable `#person/<identity>` URL and close with Escape or the close button.
 - Drag the graph background to pan; use zoom and Fit map controls. Switch to List for easier keyboard navigation. Small screens open in List by default.
-- Select up to 20 employees for enrichment. **Enrich selected** reuses eligible seven-day cached searches; **Search again** displays and consumes an additional allowance. Built-in demo runs use the CLI `enrich.py --demo`.
+- Select up to 20 employees for enrichment. **Enrich selected** reuses eligible seven-day cached searches; **Search again** displays and consumes an additional allowance. Built-in demo runs use the CLI `app/enrich.py --demo`.
 - Refresh reloads database records and never starts a search. An empty database shows an empty state; connection errors show a retry action.
 
 Organisation names are grouped case-insensitively with normalised whitespace, without fuzzy entity resolution. Titles are collected from all of a person's evidence; no claim is made that a particular title belongs to a particular organisation. Outbound links are limited to HTTP/HTTPS; other URL values remain visible as text.

@@ -10,7 +10,7 @@ From the repository root, with Neo4j running:
 set -a
 source .env
 set +a
-.venv/bin/python demo.py
+.venv/bin/python app/demo.py
 ```
 
 Refresh the People map at <http://localhost:8000> (see [UI.md](UI.md) to start it). You will see:
@@ -28,7 +28,7 @@ The demo uses stable IDs, source URLs, and timestamps. Run the command again to 
 ## Delete only this demo
 
 ```bash
-.venv/bin/python demo.py --delete
+.venv/bin/python app/demo.py --delete
 ```
 
 Load `.env` first if this is a new terminal. Refresh the UI after deleting.
@@ -40,13 +40,13 @@ If you attach other evidence or relationships to a demo person, that person is r
 ## Test the demo safely
 
 ```bash
-.venv/bin/python -m unittest -v test_demo
+PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_demo
 # With .env exported and Neo4j running:
-RUN_NEO4J_TESTS=1 .venv/bin/python -m unittest -v test_demo
+RUN_NEO4J_TESTS=1 PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_demo
 ```
 
 Four offline cases check deterministic fictional fixtures, isolated namespaces, and CLI flags. Four opt-in live cases verify repeated seeds, full/scoped cleanup, unrelated records, extra evidence, shared evidence, edited records, and ownership collisions. Tests use unique namespaces and clean up only their own records; the default demo remains available in the UI.
 
 ## Exercise the shared enrichment pipeline
 
-With the API stopped, run `.venv/bin/python enrich.py --demo`. This uses the same engine, validation, review, job progress and Neo4j writes as real collection, with offline responses from authored copies of these same 17 fixtures. The original fixture IDs/cleanup fingerprints remain unchanged. See [ENRICHMENT.md](ENRICHMENT.md) for startup, expected pending reviews and optional fictional-only Gemini evaluation. Enrichment adds separately sourced evidence, so the original `demo.py --delete` conservatively retains enriched people with those additional links.
+With the API stopped, run `.venv/bin/python app/enrich.py --demo`. This uses the same engine, validation, review, job progress and Neo4j writes as real collection, with offline responses from authored copies of these same 17 fixtures. The original fixture IDs/cleanup fingerprints remain unchanged. See [ENRICHMENT.md](ENRICHMENT.md) for startup, expected pending reviews and optional fictional-only Gemini evaluation. Enrichment adds separately sourced evidence, so the original `app/demo.py --delete` conservatively retains enriched people with those additional links.

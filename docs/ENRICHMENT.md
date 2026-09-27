@@ -1,6 +1,6 @@
 # Australian employee enrichment
 
-The real and fictional runs use the same `EnrichmentEngine`, structured parser, validation, identity checks, review decisions, Neo4j evidence writes, job progress, cancellation and budget accounting. Only the source provider changes: `LiveSources` uses Serper/public pages; `DemoSources` returns authored copies of the existing 23 `demo.py` people and fixture responses. It does not label arbitrary records as fictional.
+The real and fictional runs use the same `EnrichmentEngine`, structured parser, validation, identity checks, review decisions, Neo4j evidence writes, job progress, cancellation and budget accounting. Only the source provider changes: `LiveSources` uses Serper/public pages; `DemoSources` returns authored copies of the existing 23 `app/demo.py` people and fixture responses. It does not label arbitrary records as fictional.
 
 ## Populate a profile and demonstrate AI context
 
@@ -12,7 +12,7 @@ Only exact built-in identities can use these routes. The server reconstructs the
 
 The populated table, model result and progress persist in the existing Neo4j job records. Missing credentials, quota limits, malformed output and timeouts preserve the table and show an error. Use the explicit context retry action for another request; reopening or refreshing does not retry. Cancellation discards late model output. A server restart marks in-flight work interrupted and never repeats the request automatically. Demo context uses the same single background worker, with no Serper requests.
 
-To start this demonstration, keep the Gemini key/model in the server's `.env`, seed the existing fictional people if needed with `.venv/bin/python demo.py`, build the UI and start the local API using the commands below. `enrich.py --demo` still tests the shared rules-based collection path; the per-profile button additionally tests the fictional sensitive table and Gemini context.
+To start this demonstration, keep the Gemini key/model in the server's `.env`, seed the existing fictional people if needed with `.venv/bin/python app/demo.py`, build the UI and start the local API using the commands below. `app/enrich.py --demo` still tests the shared rules-based collection path; the per-profile button additionally tests the fictional sensitive table and Gemini context.
 
 ## Test the shared collection workflow with your demo
 
@@ -20,15 +20,15 @@ From the repository root, stop any running API with Ctrl+C, then run:
 
 ```bash
 docker compose up -d
-.venv/bin/python enrich.py --demo
+.venv/bin/python app/enrich.py --demo
 npm run build --prefix frontend
 set -a
 source .env
 set +a
-.venv/bin/python -m uvicorn api:app --host 127.0.0.1 --port 8000
+.venv/bin/python -m uvicorn api:app --app-dir app --host 127.0.0.1 --port 8000
 ```
 
-Open <http://127.0.0.1:8000>. Keep the last command running: tests and demo commands finish and do not leave a web server listening. `enrich.py` loads `.env` itself. On Windows, use your virtual environment's `python` command and load the same environment settings before starting Uvicorn.
+Open <http://127.0.0.1:8000>. Keep the last command running: tests and demo commands finish and do not leave a web server listening. `app/enrich.py` loads `.env` itself. On Windows, use your virtual environment's `python` command and load the same environment settings before starting Uvicorn.
 
 The flag seeds the existing demo if needed and fetches fictional employer profiles with explicit Australian workplace evidence, business contacts, portraits, skills, credentials, and general interests. No Serper or Gemini key is needed and no external requests are made by the demo provider. The activity box shows the persisted job; Alex has a fictional external profile to review, and the unassigned person lacks employer evidence and remains for review without spending a search. An unresolved demo match is an intentional test case, not a successful identity association.
 
@@ -37,10 +37,10 @@ Open person details to inspect each fact's value, original source, observed date
 A second run reuses eligible cached searches and deduplicates facts. First finish or cancel the previous job's pending reviews, then stop the API before running the CLI again. To exercise a deliberate new search against the same fictional responses:
 
 ```bash
-.venv/bin/python enrich.py --demo --search-again
+.venv/bin/python app/enrich.py --demo --search-again
 ```
 
-Demo accounting/cache are separate from real credits. Production UI creation rejects the built-in demo identities and directs you to this command. The OS worker lock prevents the CLI and API from running workers simultaneously. `demo.py --delete` keeps its original conservative cleanup: it retains people with added enrichment evidence rather than deleting those later records.
+Demo accounting/cache are separate from real credits. Production UI creation rejects the built-in demo identities and directs you to this command. The OS worker lock prevents the CLI and API from running workers simultaneously. `app/demo.py --delete` keeps its original conservative cleanup: it retains people with added enrichment evidence rather than deleting those later records.
 
 ## Run real collection
 
@@ -78,13 +78,13 @@ The common real/demo collection engine is rules-based and makes **zero Gemini re
 Offline mocked evaluation:
 
 ```bash
-.venv/bin/python gemini_fixture_eval.py --demo
+.venv/bin/python app/gemini_fixture_eval.py --demo
 ```
 
 After adding your server-side key, one live fictional-fixture request:
 
 ```bash
-.venv/bin/python gemini_fixture_eval.py --demo --live
+.venv/bin/python app/gemini_fixture_eval.py --demo --live
 ```
 
 The default model is `gemini-3.8-flash`; the client uses the Interactions API with `store: false`, low thinking, and a 4,096-token output cap. It requests structured JSON and validates every returned value and source against the same supported fixture facts. Missing credentials, malformed/unsupported responses, incomplete output and quota errors fail clearly without retries. Offline success verifies the adapter and application rules, not live Google availability or quota. See Google's [pricing](https://ai.google.dev/gemini-api/docs/pricing), [structured-output documentation](https://ai.google.dev/gemini-api/docs/structured-output) and [terms](https://ai.google.dev/gemini-api/terms). Real employee information remains out of the unpaid model service.
@@ -93,7 +93,7 @@ If an older setup reports HTTP 404 with `gemini-2.5-flash`, Google has restricte
 
 ```bash
 unset GEMINI_MODEL
-.venv/bin/python gemini_fixture_eval.py --demo --live
+.venv/bin/python app/gemini_fixture_eval.py --demo --live
 ```
 
 The command loads `.env` each time; restarting the web server is unnecessary. The standalone live request requires neither Neo4j nor Serper. It evaluates one built-in fictional profile without populating the UI database. Use the profile button above to test the complete fictional table → Gemini → saved UI context workflow.
@@ -121,9 +121,9 @@ On restart, queued/running jobs become interrupted; pending reviews and committe
 Use fictional isolated fixtures only:
 
 ```bash
-.venv/bin/python -m unittest -v test_enrichment test_enrichment_review test_enrichment_policy test_enrichment_sources test_gemini_fixture_eval test_demo_profile_context test_demo_profile_workflow test_public_company_sources
+PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_enrichment test_enrichment_review test_enrichment_policy test_enrichment_sources test_gemini_fixture_eval test_demo_profile_context test_demo_profile_workflow test_public_company_sources
 # After exporting .env, with local Neo4j running:
-RUN_NEO4J_TESTS=1 .venv/bin/python -m unittest -v test_enrichment test_demo_profile_workflow
+RUN_NEO4J_TESTS=1 PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_enrichment test_demo_profile_workflow
 npm run build --prefix frontend
 CI=1 npm test --prefix frontend
 ```

@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 if __package__ in {None, ''}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 
 from cli_support import CommandError, cli_entrypoint
 

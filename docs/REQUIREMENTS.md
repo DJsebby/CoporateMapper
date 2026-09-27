@@ -42,7 +42,7 @@ docker compose up -d
 set -a
 source .env
 set +a
-RUN_NEO4J_TESTS=1 .venv/bin/python -m unittest -v test_extractor
+RUN_NEO4J_TESTS=1 PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_extractor
 ```
 
 Wait for Neo4j to finish starting before the live run (use docker compose logs --tail=30 neo4j to inspect startup). Expected: all 12 tests pass. Connection or authentication problems fail the enabled live test rather than silently skipping it. See [NEO4J.md](NEO4J.md) for initial setup. No extra test packages are required; requirements.txt continues to list Python dependencies only.
@@ -60,7 +60,7 @@ Install the existing API test dependency and run offline Python tests:
 
 ```bash
 .venv/bin/python -m pip install -r requirements-dev.txt
-.venv/bin/python -m unittest -v test_api test_extractor
+PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_api test_extractor
 ```
 
 Run the frontend build and browser tests:
@@ -91,7 +91,7 @@ python test_name.py
 - The default CLI action seeds the demo; --delete invokes only cleanup. Each invocation uses a single managed write transaction.
 - Cleanup must require exact fixture IDs and explicit ownership markers. It must preserve unrelated nodes/relationships, non-demo evidence attached to demo people, shared evidence, and edited evidence. Repeated cleanup must be safe.
 - Seeding must refuse unowned ID collisions before making changes. Live tests must use unique test namespaces so they cannot delete the visible demo or user data.
-- Run .venv/bin/python -m unittest -v test_demo for four offline cases (four live cases skipped), or enable RUN_NEO4J_TESTS=1 for all eight. See [DEMO.md](DEMO.md) for usage.
+- Run PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_demo for four offline cases (four live cases skipped), or enable RUN_NEO4J_TESTS=1 for all eight. See [DEMO.md](DEMO.md) for usage.
 
 ## Discovery-to-database pipeline acceptance cases
 
@@ -111,7 +111,7 @@ python test_name.py
 - Decode Joomla literal concatenations only when their constructed mailto link targets a matching cloak element in the same card. Cover entity semicolons, escaped quotes, multiline rendering, comments, unsupported reassignment/control flow, malformed escapes, and valid neighbouring cards. Never execute page JavaScript.
 - Require explicit card organisation fields or an exact match between structured organisation name and a team-page heading. A domain, unrelated organisation record, or generic 'Meet the team' heading alone must not establish membership.
 - Preserve stable source/name identities and separate evidence for repeated/conflicting entries. Verify parameterised repeat writes, pipeline handling of actual HTML through the crawler, and an opt-in live Neo4j/API round trip using isolated fictional records and scoped cleanup.
-- Run `.venv/bin/python -m unittest -v test_staff_cards` offline, or export the existing Neo4j settings and set `RUN_NEO4J_TESTS=1` for the live case. The original `test_extractor` module still needs only the standard library for offline tests. See [PIPELINE.md](PIPELINE.md) for supported layouts and limits.
+- Run `PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_staff_cards` offline, or export the existing Neo4j settings and set `RUN_NEO4J_TESTS=1` for the live case. The original `test_extractor` module still needs only the standard library for offline tests. See [PIPELINE.md](PIPELINE.md) for supported layouts and limits.
 
 ## Graceful failures, person images, and activity preview
 
@@ -125,7 +125,7 @@ python test_name.py
 Run the new offline suites alongside existing regression tests:
 
 ```bash
-.venv/bin/python -m unittest -v test_cli test_images test_pipeline test_extractor test_staff_cards test_api test_demo
+PYTHONPATH=app:tests .venv/bin/python -m unittest -v test_cli test_images test_pipeline test_extractor test_staff_cards test_api test_demo
 npm run build --prefix frontend
 npm test --prefix frontend
 ```

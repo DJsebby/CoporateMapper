@@ -5,7 +5,7 @@ import sys
 
 # Support both `python tests/test_*.py` and module execution from the repo root.
 if __package__ in {None, ''}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 
 from cli_support import CommandError, cli_entrypoint
 
