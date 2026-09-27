@@ -53,3 +53,23 @@ This file records tasks explicitly approved by the CEO. A blank template does no
 - **Allowed Changes:** `recon/name.py`, `test_name.py`, and relevant run documentation.
 - **Out of Scope:** Scraping result pages and additional search behavior.
 - **Notes:** Explicitly requested on 2026-09-26. See [COMPLETED.md](COMPLETED.md) for verification and limitations.
+
+### RECON-004 — Search Serper for a quoted email
+
+- **Task ID:** RECON-004
+- **Status:** Completed
+- **Objective:** Add an email lookup helper matching the existing Serper name lookup.
+- **Requirements:** Search the supplied email as an exact quoted query, request at most 10 results, use the existing Serper key and Australia locale, and do not make a live search during implementation.
+- **Allowed Changes:** `recon/email.py`, focused offline tests, and relevant source/security documentation.
+- **Out of Scope:** Fetching result pages, scraping, and anti-bot evasion.
+- **Notes:** Explicitly requested on 2026-09-27. See [COMPLETED.md](COMPLETED.md) for verification and limitations.
+
+### RECON-005 — Use a generic search function name
+
+- **Task ID:** RECON-005
+- **Status:** Completed
+- **Objective:** Replace email-specific references with the generic `search` function name.
+- **Requirements:** Preserve the existing Serper request and quoted-email query behavior.
+- **Allowed Changes:** `recon/generic.py`, `recon/email.py`, `test_email.py`, and relevant documentation.
+- **Out of Scope:** Changing query formatting, locale, result count, or provider.
+- **Notes:** Explicitly requested on 2026-09-27. See [COMPLETED.md](COMPLETED.md) for verification and limitations.

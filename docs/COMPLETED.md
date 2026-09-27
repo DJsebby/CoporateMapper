@@ -137,3 +137,23 @@ The following entry predates the current setup. Its observations describe that e
 - **Verification:** No live search or test command was run. Editor diagnostics are pending.
 - **Decisions:** Recorded DEC-004. Keep the Serper key in local environment configuration; do not hardcode or print it.
 - **Remaining Issues:** Runtime behavior against the live Serper service remains unverified.
+
+## RECON-004 — Search Serper for a quoted email
+
+- **Task ID:** RECON-004
+- **Date:** 2026-09-27
+- **Work Completed:** Added an email search helper in `recon/email.py`, mirroring the name helper's `http.client` request, `.env` key, Australia locale, 10-result limit, JSON return, and credential-redacted HTTP errors. Added offline mocked tests; the callable was later moved to `recon.generic.search`.
+- **Files Changed:** Added `test_email.py`; updated `recon/email.py`, `docs/DATA_SOURCES.md`, `docs/SECURITY.md`, `docs/TASKS.md`, `docs/DECISIONS.md`, and this log.
+- **Verification:** `python -m unittest -v test_email` was skipped at the user's direction. Editor diagnostics found no issues in `recon/email.py` or `test_email.py`. No live search was made; the tests mock the HTTP connection.
+- **Decisions:** Recorded DEC-005. The query consists only of the supplied email surrounded by double quotes.
+- **Remaining Issues:** Live Serper behavior remains unverified.
+
+## RECON-005 — Use a generic search function name
+
+- **Task ID:** RECON-005
+- **Date:** 2026-09-27
+- **Work Completed:** Updated the manual email runner to import/call `recon.generic.search`; changed `recon.email` to re-export the same helper. Updated README and data-source wording. Search request behavior remains unchanged.
+- **Files Changed:** Updated `test_email.py`, `recon/email.py`, `README.md`, `docs/DATA_SOURCES.md`, `docs/TASKS.md`, and this log.
+- **Verification:** Editor diagnostics and tests were not run. No live Serper request was made.
+- **Decisions:** Keep the email example's exact quoted-email query, Australia locale, and 10-result limit; only use the generic function name.
+- **Remaining Issues:** None beyond the existing lack of live API verification.
