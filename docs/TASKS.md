@@ -54,21 +54,22 @@ This file records tasks explicitly approved by the CEO. A blank template does no
 - **Out of Scope:** Scraping result pages and additional search behavior.
 - **Notes:** Explicitly requested on 2026-09-26. See [COMPLETED.md](COMPLETED.md) for verification and limitations.
 
-### ENRICHMENT-001 — Australian public professional findings with a shared demo pipeline
+### RECON-004 — Search Serper for a quoted email
 
-- **Status:** Implemented; verification recorded in COMPLETED.md.
-- **Objective:** Implement the user-supplied Australian employee aggregation plan and use the same real/demo collection engine with a built-in demo flag.
-- **Requirements:** One quoted Serper search per eligible employee/run, seven-day cache, durable accounting, 15 page attempts, explicit Australian work context, identity review, permitted sourced findings, legacy filtering, job controls, live activity, fixture-only Gemini.
-- **Allowed Changes:** Extraction/privacy controls, provider/worker and Neo4j job/evidence storage, local API/UI, fixture CLI, configuration, tests and documentation.
-- **Out of Scope:** Sensitive dossiers, personal/home contact data, real-employee Gemini calls, scoring, training advice, shared deployment, scheduled monitoring and historical database cleanup.
-- **Notes:** Explicit implementation instruction and same-pipeline/demo-flag clarification from the user on 2026-09-27.
+- **Task ID:** RECON-004
+- **Status:** Completed
+- **Objective:** Add an email lookup helper matching the existing Serper name lookup.
+- **Requirements:** Search the supplied email as an exact quoted query, request at most 10 results, use the existing Serper key and Australia locale, and do not make a live search during implementation.
+- **Allowed Changes:** `recon/email.py`, focused offline tests, and relevant source/security documentation.
+- **Out of Scope:** Fetching result pages, scraping, and anti-bot evasion.
+- **Notes:** Explicitly requested on 2026-09-27. See [COMPLETED.md](COMPLETED.md) for verification and limitations.
 
+### RECON-005 — Use a generic search function name
 
-### PROFILE-CONTEXT-001 — Click-to-populate employee tables and fictional Gemini context
-
-- **Status:** Implementation in progress; verification will be recorded in COMPLETED.md.
-- **Objective:** Populate real employee additional information on explicit click and demonstrate table-to-Gemini context end to end with authored fictional profiles.
-- **Requirements:** Preserve real collection exclusions and sourcing; full/partial/minimal demo tables may contain explicitly synthetic personal/sensitive examples. After saving the demo table, generate a sourced profile summary, missing-field gaps and general privacy implications. Persist progress/results and preserve tables on model failure; no automatic request replay.
-- **Allowed Changes:** Profile UI, isolated demo catalog/context service, existing worker/API/job persistence, regression tests and documentation.
-- **Out of Scope:** Real sensitive-data collection, sending real employees to Gemini, arbitrary fictional overrides, risk scoring, targeting advice and shared deployment.
-- **Notes:** Explicit user request and confirmed summary/gaps/privacy preference on 2026-09-27.
+- **Task ID:** RECON-005
+- **Status:** Completed
+- **Objective:** Replace email-specific references with the generic `search` function name.
+- **Requirements:** Preserve the existing Serper request and quoted-email query behavior.
+- **Allowed Changes:** `recon/generic.py`, `recon/email.py`, `test_email.py`, and relevant documentation.
+- **Out of Scope:** Changing query formatting, locale, result count, or provider.
+- **Notes:** Explicitly requested on 2026-09-27. See [COMPLETED.md](COMPLETED.md) for verification and limitations.
