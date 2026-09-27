@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Collector output (contains personal data; never publish or commit)
+output/
+
+# COLLECT-007 exposure-assessment: fetched documents and local vector index cache
+crawler/exposure_cache/
