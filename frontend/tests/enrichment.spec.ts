@@ -129,6 +129,13 @@ test('job creation failures retain the idempotency key for retry and activity fa
   await page.goto('/')
   const activity = page.getByRole('region',{name:'Recent activity'})
   await expect(activity).toContainText('Activity is unavailable')
+  const activityBounds = (await activity.boundingBox())!
+  const messageBounds = (await activity.getByRole('status').boundingBox())!
+  const retryBounds = (await activity.getByRole('button',{name:'Retry activity'}).boundingBox())!
+  expect(Math.abs((retryBounds.x + retryBounds.width / 2) - (activityBounds.x + activityBounds.width / 2))).toBeLessThan(2)
+  expect(Math.abs((retryBounds.y + retryBounds.height / 2) - (activityBounds.y + activityBounds.height / 2))).toBeLessThan(2)
+  expect(messageBounds.y + messageBounds.height).toBeLessThan(retryBounds.y)
+  expect(retryBounds.y - (messageBounds.y + messageBounds.height)).toBeLessThan(24)
   unavailable = false
   await activity.getByRole('button',{name:'Retry activity'}).click()
   await expect(activity).toContainText('No enrichment jobs yet')

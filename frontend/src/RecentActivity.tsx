@@ -15,9 +15,9 @@ export default function RecentActivity({ data, error, onRefresh, onChanged }: { 
   function review(job: EnrichmentJob, item: EnrichmentItem, candidate: Candidate, decision: 'accept' | 'reject', source?: string) {
     return mutate(`/api/enrichment/jobs/${encodeURIComponent(job.id)}/items/${encodeURIComponent(item.id)}/review`, {candidate_id: candidate.id, decision, ...(source ? {australian_work_source: source} : {})}, candidate.id)
   }
-  return <section className="recent-activity" aria-labelledby="activity-title" aria-describedby="activity-note">
+  return <section className={`recent-activity ${error ? 'activity-unavailable' : ''}`} aria-labelledby="activity-title" aria-describedby="activity-note">
     <div className="activity-heading"><h2 id="activity-title">Recent activity</h2><span className="activity-live">{error ? 'Unavailable' : 'Live'}</span><p id="activity-note">Saved enrichment jobs. Updated every two seconds.</p></div>
-    {error && <div className="activity-message"><p role="status">{error}</p><button className="button" onClick={onRefresh}>Retry activity</button></div>}
+    {error && <div className="activity-message activity-retry"><p role="status">{error}</p><button className="button" onClick={onRefresh}>Retry activity</button></div>}
     {mutationError && <p role="alert" className="activity-message action-error">{mutationError}</p>}
     {!data && !error && <p role="status" className="activity-message">Loading activity…</p>}
     {data && !data.jobs.length && <p className="activity-message">No enrichment jobs yet. Select employees to start.</p>}
