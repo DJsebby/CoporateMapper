@@ -1,6 +1,7 @@
 import os
 import time
 import requests
+import argparse
 
 def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampled_site"):
     cdx_api_url = "https://web.archive.org/cdx/search/cdx"
@@ -18,12 +19,12 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
 
     if response.status_code != 200:
         print(f"[!] Error fetching CDX index: {response.status_code}")
-        return
+        return []
 
     data = response.json()
     if len(data) <= 1:
         print("[!] No archived records found for this domain.")
-        return
+        return []
 
     headers = data[0]
     rows = data[1:]
@@ -44,7 +45,7 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
 
     if not valid_rows:
         print("[!] No non-image records found.")
-        return
+        return []
 
     print(f"[*] Non-image records available: {len(valid_rows)}")
 
@@ -68,6 +69,7 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
 
     os.makedirs(output_dir, exist_ok=True)
 
+    downloaded_files = []
     for row_dict in selected_rows:
         timestamp = row_dict['timestamp']
         original_url = row_dict['original']
@@ -99,6 +101,7 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
             if file_res.status_code == 200:
                 with open(local_filepath, "wb") as f:
                     f.write(file_res.content)
+                downloaded_files.append(local_filepath)
             else:
                 print(f"[-] Failed to fetch asset. Status: {file_res.status_code}")
         except Exception as e:
@@ -107,8 +110,23 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
         time.sleep(1.0)
 
     print(f"\n[*] Done! Sampled files saved to folder: '{output_dir}'")
+    return downloaded_files
+
+
+class WaybackSearch:
+    def __init__(self, website):
+        self.website = website.strip().rstrip("/")
+        if not self.website:
+            raise ValueError("website must not be empty")
+
+    def fetch(self, sample_count=2, output_dir="wayback_sampled_site"):
+        return fetch_sampled_wayback_site(self.website, sample_count, output_dir)
 
 # Example usage:
 if __name__ == "__main__":
-    target_domain = "www.ahsca.org.au" # Replace with your target website domain
-    fetch_sampled_wayback_site(target_domain, sample_count=2)
+    parser = argparse.ArgumentParser(description="Fetch sampled Wayback snapshots.")
+    parser.add_argument("website", help="Website domain or URL to archive")
+    parser.add_argument("--sample-count", type=int, default=2)
+    parser.add_argument("--output-dir", default="wayback_sampled_site")
+    args = parser.parse_args()
+    WaybackSearch(args.website).fetch(args.sample_count, args.output_dir)

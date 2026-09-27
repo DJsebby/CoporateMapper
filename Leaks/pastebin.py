@@ -1,3 +1,4 @@
+import argparse
 import time
 import random
 import requests
@@ -71,10 +72,23 @@ def run_bulletproof_dork(company_name):
     else:
         print("\n[-] No matches found.")
 
+    return sorted(collected_urls)
+
+
+class PastebinSearch:
+    def __init__(self, website):
+        self.website = website.strip()
+        if not self.website:
+            raise ValueError("website must not be empty")
+
+    def search(self):
+        return run_bulletproof_dork(self.website)
+
 # ==========================================
 # CHANGE YOUR TARGET COMPANY HERE:
 # ==========================================
 if __name__ == "__main__":
-    TARGET_COMPANY = "ahcsa.org.au"
-
-    run_bulletproof_dork(TARGET_COMPANY)
+    parser = argparse.ArgumentParser(description="Search Pastebin links for a website.")
+    parser.add_argument("website", help="Company name or domain to search")
+    args = parser.parse_args()
+    PastebinSearch(args.website).search()

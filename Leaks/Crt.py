@@ -1,74 +1,61 @@
+import argparse
+
 import requests
-import sys
 
-def fetch_crtsh_subdomains(domain, output_file=None):
-    """
-    Queries crt.sh JSON endpoint for certificate transparency logs
-    and parses unique subdomains.
-    """
-    # Using the standard crt.sh JSON format query with wildcard
-    url = f"https://crt.sh/?q=%.{domain}&output=json"
 
-    print(f"[*] Querying Certificate Transparency logs on crt.sh for: {domain}...")
+class CrtShSearch:
+    def __init__(self, domain: str) -> None:
+        self.domain = domain.strip().lower().strip(".")
+        if not self.domain:
+            raise ValueError("domain must not be empty")
 
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        response = requests.get(url, headers=headers, timeout=30)
-
+    def fetch_subdomains(self, output_file: str | None = None) -> list[str]:
+        response = requests.get(
+            "https://crt.sh/",
+            params={"q": f"%.{self.domain}", "output": "json"},
+            headers={"User-Agent": "CorporateMapper/1.0"},
+            timeout=30,
+        )
         if response.status_code != 200:
-            print(f"[!] Error: Received HTTP status code {response.status_code}")
             return []
 
         try:
-            data = response.json()
+            entries = response.json()
         except ValueError:
-            print("[!] Error: Failed to parse JSON response (crt.sh might be busy or returning HTML error).")
             return []
 
         subdomains = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for name in entry.get("name_value", "").splitlines():
+                name = name.strip().lower()
+                if name.startswith("*."):
+                    name = name[2:]
+                if name:
+                    subdomains.add(name)
 
-        # Parse certificate entries
-        for entry in data:
-            name_value = entry.get('name_value', '')
+        results = sorted(subdomains)
+        if output_file and results:
+            with open(output_file, "w", encoding="utf-8") as output:
+                output.write("\n".join(results) + "\n")
+        return results
 
-            # Certificates can include multiple domains separated by newlines
-            for sub in name_value.split('\n'):
-                sub = sub.strip().lower()
-                if sub:
-                    # Remove wildcard artifacts (e.g., *.example.com -> example.com)
-                    if sub.startswith('*.'):
-                        sub = sub[2:]
-                    subdomains.add(sub)
 
-        sorted_subdomains = sorted(list(subdomains))
-        print(f"[+] Success! Found {len(sorted_subdomains)} unique subdomains.")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Search crt.sh for a domain.")
+    parser.add_argument("domain", help="Root domain to search, e.g. example.com")
+    parser.add_argument("--output", help="Optional file to save the results")
+    args = parser.parse_args()
 
-        # Save to file if specified
-        if output_file and sorted_subdomains:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                for s in sorted_subdomains:
-                    f.write(s + '\n')
-            print(f"[*] Results successfully saved to: '{output_file}'")
+    search = CrtShSearch(args.domain)
+    results = search.fetch_subdomains(args.output)
+    print(f"Found {len(results)} unique names for {search.domain}.")
+    for name in results[:15]:
+        print(name)
+    if len(results) > 15:
+        print(f"... and {len(results) - 15} more")
 
-        return sorted_subdomains
 
-    except Exception as e:
-        print(f"[!] Connection error: {e}")
-        return []
-
-# ==========================================
-# CHANGE YOUR TARGET DOMAIN HERE:
-# ==========================================
 if __name__ == "__main__":
-    TARGET_DOMAIN = "ahcsa.org.au"  # <-- Type the root domain here (e.g., tesla.com)
-    OUTPUT_FILENAME = f"{TARGET_DOMAIN.replace('.', '_')}_subdomains.txt"
-
-    results = fetch_crtsh_subdomains(TARGET_DOMAIN, OUTPUT_FILENAME)
-
-    # Print a quick terminal preview of up to 15 subdomains
-    if results:
-        print("\n--- Preview of Subdomains ---")
-        for s in results[:15]:
-            print(f"  - {s}")
-        if len(results) > 15:
-            print(f"  ... and {len(results) - 15} more.")
+    main()
