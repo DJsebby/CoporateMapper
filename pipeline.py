@@ -3,8 +3,9 @@
 Run from the repository root after exporting the Neo4j settings in .env:
     .venv/bin/python pipeline.py https://example.com --max-pages 20
 
-The page budget limits content fetch attempts, not discovery's sitemap/HEAD
-requests. Each extracted page is committed independently by Extractor.process.
+The page budget limits selected content fetch attempts. Public-only discovery
+reads one entry page and at most ten sitemaps (500 candidate URLs), plus robots
+policies; it does not issue unbounded availability probes. Each extracted page is committed independently by Extractor.process.
 """
 
 from __future__ import annotations
@@ -15,10 +16,13 @@ import json
 import sys
 from urllib.parse import urldefrag, urlsplit
 
-from crawler.crawler import URLFetcher
-from crawler.discover import WebsiteDiscoverer
-from crawler.prioritiser import Prioritiser
-from extractor import Extractor
+from cli_support import cli_entrypoint, command_imports
+
+with command_imports(__name__):
+    from public_company_sources import PublicURLFetcher as URLFetcher
+    from public_company_sources import PublicWebsiteDiscoverer as WebsiteDiscoverer
+    from crawler.prioritiser import Prioritiser
+    from extractor import Extractor
 
 
 @dataclass
@@ -35,6 +39,7 @@ class PageResult:
 class PipelineResult:
     base_url: str
     discovered_count: int = 0
+    discovery_failure_count: int = 0
     valid_unique_count: int = 0
     eligible_count: int = 0
     selected_count: int = 0
@@ -117,6 +122,8 @@ class Pipeline:
         except Exception as exc:
             raise PipelineError('discovery', report) from exc
         report.discovered_count = len(discovered)
+        failures = getattr(self.discoverer, "last_failures", ())
+        report.discovery_failure_count = len(failures) if isinstance(failures, (list, tuple)) else 0
         urls = set()
         for value in discovered:
             if isinstance(value, str):
@@ -181,11 +188,12 @@ def _arguments(argv):
     return args
 
 
+@cli_entrypoint('Pipeline')
 def main(argv=None) -> int:
     args = _arguments(argv)
     # Keep --help and argument validation independent of database credentials.
-    from database import connected_extractor
     try:
+        from database import connected_extractor
         with connected_extractor() as extractor:
             with Pipeline(extractor) as pipeline:
                 report = pipeline.run(args.url, min_score=args.min_score,
@@ -204,7 +212,9 @@ def main(argv=None) -> int:
         print('No URLs matched the requested priority range.', file=sys.stderr)
     elif report.fetched_count and not report.records_stored:
         print('No supported person records were stored. The extractor reads Schema.org JSON-LD, microdata, and recognised HTML staff-card layouts.', file=sys.stderr)
-    return 2 if any(page.status == 'fetch_failed' for page in report.pages) else 0
+    if report.discovery_failure_count:
+        print(f'Discovery had {report.discovery_failure_count} failed checks; results may be incomplete.', file=sys.stderr)
+    return 2 if report.discovery_failure_count or any(page.status == 'fetch_failed' for page in report.pages) else 0
 
 
 if __name__ == '__main__':

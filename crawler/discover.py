@@ -17,6 +17,7 @@ class WebsiteDiscoverer:
         user_agent: str = "CompanyMapper/1.0",
     ) -> None:
         self.timeout = timeout
+        self.last_failures: list[str] = []
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -48,15 +49,19 @@ class WebsiteDiscoverer:
 
     def discover(self, base_url: str) -> list[str]:
 
+        self.last_failures = []
         base_url = self._normalise_base_url(base_url)
 
         urls: set[str] = set()
+        missing_checks: list[str] = []
         sitemap_urls: set[str] = {
             f"{base_url}/sitemap.xml"
         }
 
         try:
             robots_result = self.robots_parser.discover(base_url)
+            missing_checks.extend(robots_result.missing)
+            self.last_failures.extend(url for url in robots_result.failed if url not in robots_result.missing)
 
             sitemap_urls.update(
                 getattr(robots_result, "sitemaps", [])
@@ -67,7 +72,7 @@ class WebsiteDiscoverer:
             )
 
         except Exception:
-            pass
+            self.last_failures.append("robots discovery")
 
         for sitemap_url in sitemap_urls:
             try:
@@ -76,9 +81,11 @@ class WebsiteDiscoverer:
                 )
 
                 urls.update(result.urls)
+                missing_checks.extend(result.missing_sitemaps)
+                self.last_failures.extend(url for url in result.failed_sitemaps if url not in result.missing_sitemaps)
 
             except Exception:
-                pass
+                self.last_failures.append("sitemap discovery")
 
         urls = {
             url
@@ -92,6 +99,8 @@ class WebsiteDiscoverer:
             if self._url_exists(url):
                 valid_urls.append(url)
 
+        if not valid_urls:
+            self.last_failures.extend(missing_checks)
         return valid_urls
 
     def _url_exists(self, url: str) -> bool:
@@ -103,12 +112,16 @@ class WebsiteDiscoverer:
                 allow_redirects=True,
             )
 
-            if 200 <= response.status_code < 400:
+            status_code = response.status_code
+            response.close()
+            if 200 <= status_code < 400:
                 return True
 
-            if response.status_code in {403, 405, 501}:
+            if status_code in {403, 405, 501}:
                 return self._get_check(url)
 
+            if status_code not in {404, 410}:
+                self.last_failures.append("URL availability check")
             return False
 
         except requests.RequestException:
@@ -125,11 +138,14 @@ class WebsiteDiscoverer:
             )
 
             valid = 200 <= response.status_code < 400
+            if not valid and response.status_code not in {404, 410}:
+                self.last_failures.append("URL availability check")
             response.close()
 
             return valid
 
         except requests.RequestException:
+            self.last_failures.append("URL availability check")
             return False
 
     @staticmethod

@@ -1,12 +1,16 @@
+"""Manual live Serper query; importing this module never sends a request."""
+
 import json
 
-from recon.name import search_person
+from cli_support import cli_entrypoint
 
 
-def main() -> None:
-	results = search_person('"Steven Brugioni"', company="bmw")
-	print(json.dumps(results, indent=2))
+@cli_entrypoint('Name search')
+def main():
+    from recon.name import search_person
+    results = search_person('"Steven Brugioni"', company='bmw')
+    print(json.dumps(results, indent=2))
 
 
-if __name__ == "__main__":
-	main()
+if __name__ == '__main__':
+    raise SystemExit(main())

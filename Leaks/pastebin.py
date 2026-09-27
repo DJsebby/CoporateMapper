@@ -1,10 +1,19 @@
 import time
 import random
-import requests
-from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 
+from pathlib import Path
+import sys
+
+if __package__ in {None, ''}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from cli_support import CommandError, cli_entrypoint
+
+
 def safe_duckduckgo_search(query):
+    import requests
+    from bs4 import BeautifulSoup
     # Use standard browser headers to look completely legitimate
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -15,20 +24,19 @@ def safe_duckduckgo_search(query):
 
     url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
 
+    response = requests.post(url, headers=headers, timeout=10)
     try:
-        response = requests.post(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            links = set()
-            # DuckDuckGo HTML results layout class for result links
-            for a in soup.select('.result__url'):
-                link = a.get('href')
-                if link:
-                    links.add(link)
-            return list(links)
-    except Exception as e:
-        print(f"[!] Error: {e}")
-    return []
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        links = set()
+        for anchor in soup.select('.result__url'):
+            link = anchor.get('href')
+            if link:
+                links.add(link)
+        return list(links)
+    finally:
+        response.close()
+
 
 def run_bulletproof_dork(company_name):
     osint_queries = [
@@ -49,9 +57,15 @@ def run_bulletproof_dork(company_name):
 
     print(f"[*] Starting safe OSINT search for: {company_name}\n")
 
+    failed = False
     for idx, query in enumerate(osint_queries, 1):
         print(f"[{idx}/10] Querying: {query}")
-        results = safe_duckduckgo_search(query)
+        try:
+            results = safe_duckduckgo_search(query)
+        except Exception:
+            failed = True
+            print("[!] A search request failed; saving earlier results.", file=sys.stderr)
+            break
 
         for url in results:
             if "pastebin.com" in url:
@@ -68,13 +82,15 @@ def run_bulletproof_dork(company_name):
             for url in sorted(collected_urls):
                 f.write(url + "\n")
         print(f"\n[*] Success! Saved {len(collected_urls)} unique links to '{output_file}'.")
-    else:
+    elif not failed:
         print("\n[-] No matches found.")
+    if failed:
+        raise CommandError("Search incomplete. Any earlier matching URLs have been saved; try again later.")
 
-# ==========================================
-# CHANGE YOUR TARGET COMPANY HERE:
-# ==========================================
-if __name__ == "__main__":
-    TARGET_COMPANY = "ahcsa.org.au"
+@cli_entrypoint('Paste search')
+def main():
+    run_bulletproof_dork('ahcsa.org.au')
 
-    run_bulletproof_dork(TARGET_COMPANY)
+
+if __name__ == '__main__':
+    raise SystemExit(main())

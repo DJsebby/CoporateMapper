@@ -3,15 +3,15 @@
 The runner connects the existing components in this order:
 
 ```text
-WebsiteDiscoverer.discover(website)
+PublicWebsiteDiscoverer.discover(website)
     → Prioritiser.rank_urls(discovered URLs)
-    → URLFetcher.fetch_page(selected URL)
+    → PublicURLFetcher.fetch_page(selected URL)
     → Extractor.process(PageDocument)
     → Neo4j Person and PersonEvidence records
-    → existing read-only people API and UI
+    → people API and UI with enrichment
 ```
 
-Discovery identifies candidate URLs. The prioritiser ranks them; it does not extract people. The crawler downloads and normalises selected pages, including their JSON-LD and original HTML. The extractor identifies explicit people and writes their fields, confidence, source URL, timestamp, and original evidence using the existing storage contract.
+Discovery identifies candidate URLs. The prioritiser ranks them; it does not extract people. The crawler downloads and normalises selected pages, including their JSON-LD and original HTML. The extractor identifies explicit people and writes their fields, confidence, source URL, timestamp, and minimized permitted evidence using the existing storage contract. Raw source objects and biographies are not persisted by new runs.
 
 ## Run it
 
@@ -39,7 +39,7 @@ The runner normalises bare website hosts to HTTPS, removes URL fragments, dedupl
 
 ## Read the results
 
-The command prints a JSON report with discovered/valid/eligible/selected URL counts, successful fetches, pages containing people, person evidence records processed, distinct person identities, and each selected page's priority and outcome.
+The command prints a JSON report with discovered/valid/eligible/selected URL counts, a `discovery_failure_count`, successful fetches, pages containing people, person evidence records processed, distinct person identities, and each selected page's priority and outcome.
 
 | Status | Meaning |
 | --- | --- |
@@ -51,7 +51,7 @@ The command prints a JSON report with discovered/valid/eligible/selected URL cou
 
 `records_stored` counts processed person evidence records, not newly created nodes. One person may have multiple evidence records. The existing MERGE logic deduplicates identical records, while a later crawl has a new observation timestamp and can add new evidence.
 
-Exit codes are 0 for a completed run, 1 for setup or stage failures, and 2 for invalid arguments or a run containing failed page fetches. An empty discovery result is printed with a diagnostic: the discoverer currently suppresses some network/sitemap errors, so zero URLs does not prove the site has no people. Database errors are never reported as successful writes. A failed run prints the partial report; earlier page transactions remain committed.
+Exit codes are 0 for a completed run, 1 for setup or stage failures, 2 for invalid arguments or incomplete discovery/page fetches, and 130 for keyboard interruption. Known discovery failures are counted and reported; a missing robots file or default sitemap does not make an otherwise useful discovery fail by itself. An empty discovery result is printed with a diagnostic and never proves the site has no people. Database errors are never reported as successful writes. A failed run prints the partial report; earlier page transactions remain committed.
 
 ## Use in Python
 
@@ -65,14 +65,14 @@ with connected_extractor() as extractor:
         print(report.records_stored, report.unique_people)
 ```
 
-Discovery, prioritisation, crawling, and extraction can all be injected for tests. The pipeline closes HTTP clients it creates; injected components and the Neo4j driver remain caller-owned. WebsiteDiscoverer and URLFetcher also support context managers directly.
+Discovery, prioritisation, crawling, and extraction can all be injected for tests. The pipeline closes HTTP clients it creates; injected components and the Neo4j driver remain caller-owned. The default adapters share the enrichment public-source policy. The older standalone crawler helpers remain available for explicitly injected/manual checks.
 
 ## Existing component limits
 
-- Person extraction supports Schema.org Person JSON-LD embedded in HTML, HTML microdata, and the staff-card layouts described below. The existing crawler does not populate structured data from standalone JSON response bodies. Other HTML layouts, ordinary page text, social posts, and inferred interests need additional extraction rules. No NLP or model-based inference was added.
+- Person extraction supports Schema.org Person JSON-LD embedded in HTML, HTML microdata, and the staff-card layouts described below. The public default fetcher also supports standalone JSON/JSON-LD responses. Other HTML layouts, ordinary page text, social posts, and inferred interests need additional extraction rules. No NLP or model-based inference was added.
 - Organisation membership requires an explicit person/card field or a matching organisation name and team-page heading as described below. A target website alone does not assign people to that organisation.
-- The discoverer uses robots/sitemap discovery and probes candidate URLs before prioritisation. `max_pages` therefore limits crawler page attempts, not discovery requests or sitemap traversal.
-- The existing robots parser collects both Allow and Disallow paths as candidates. It is not a robots-policy enforcement layer; this integration preserves that behaviour. Discovery can also return URLs outside the initial host. Configure/review target scope and collection rules before an external run; those policies were not redesigned in this task.
+- Default discovery reads one entry HTML page, at most ten robots-advertised/default XML sitemaps, and retains at most 500 same-origin content candidates. It supports sitemap indexes, follows entry-page links, and avoids availability probes. `max_pages` limits subsequent selected content attempts; bounded metadata/robots requests are additional.
+- Both discovery and content fetching use the public-only transport: DNS/IP pinning, private-network and redirect checks, robots enforcement, response/time limits and no authentication/CAPTCHA bypass. Advertised public CDN sitemap metadata is allowed; content candidates remain on the initial or redirected employer origin. Disallowed robots paths are not collected as candidates. Legacy manual helpers are not the default pipeline transport.
 - The crawler does not execute page JavaScript. Failed or unsupported responses are reported without attempting alternate access methods.
 
 ## Staff cards and email links
@@ -86,16 +86,22 @@ The extractor also reads ordinary HTML staff cards without requiring Schema.org 
 
 Email extraction follows `mailto:` links within each card, decodes percent-encoded recipients, and omits subject/CC/BCC values and empty or placeholder links such as `mailto:#`. Multiple valid recipients are preserved. It also reads the Joomla email-cloaking template used on the Adelaide BMW page: literal string concatenations are decoded only when they construct a mailto link for a matching cloak element in the same card. General JavaScript, dynamic calls, and unsupported statements are not executed or guessed. Telephone links within the card are retained separately from job titles. No email is sent or contact form submitted.
 
-Staff-card evidence has method `html-staff-card`, a source URL, fetch time, HTML line/column, extracted fields, and the relevant contact source (including the original Joomla script when decoded). It does not claim that the page supplied Schema.org markup. Existing confidence weights are reused: name/card 0.60, explicit profile +0.15, role +0.10, organisation +0.10, contact +0.05. These measure completeness, not verified identity. UI scores remain `-`.
+Persisted staff-card evidence has method `html-staff-card`, a source URL, fetch time, HTML line/column and permitted typed findings. Raw Joomla scripts and source objects are used transiently during parsing and omitted from new database writes. It does not claim that the page supplied Schema.org markup. Existing confidence weights are reused: name/card 0.60, explicit profile +0.15, role +0.10, organisation +0.10, contact +0.05. These measure completeness, not verified identity. UI scores remain `-`.
 
 Repeated staff entries retain separate evidence and use the existing source-plus-name identity fallback unless an explicit profile exists. Missing email addresses remain empty; names are never used to invent email addresses. Sites with other card structures or contact scripts need additional adapters.
+
+## Person images
+
+The extractor retains image URLs explicitly associated with a person: Schema.org `Person.image` values and images inside supported staff cards. Relative references are resolved against the fetched page URL. The resulting `image_urls` are stored in the existing Neo4j person evidence JSON and returned by the people API, without changing person identity or completeness scores.
+
+This records a source-provided portrait association; it does not detect faces or identify a person from an image. Images elsewhere on a page are not assigned to people. Image URL forms include strings, ImageObject fields/local references, microdata image properties, and staff-card image src/lazy-src/srcset/picture markup. CSS background images and JavaScript-rendered images are not collected. Malformed link/image URLs are skipped by the crawler so valid neighbouring people can still reach extraction. No image files are downloaded or stored, and older records need their source page crawled again to gain image URLs. The UI falls back to initials for missing or broken images.
 
 ## Verification
 
 Run the new offline tests:
 
 ```bash
-.venv/bin/python -m unittest -v test_pipeline test_staff_cards
+.venv/bin/python -m unittest -v test_pipeline test_staff_cards test_public_company_sources
 ```
 
 Run named regression suites, including the opt-in live Neo4j checks:
@@ -106,4 +112,4 @@ RUN_NEO4J_TESTS=1 .venv/bin/python -m unittest -v test_pipeline test_extractor t
 
 Live pipeline tests still use simulated HTTP with real discovery/parsing/crawling/extraction, write only UUID-isolated fictional records, verify those records through the UI API, and clean them up. No third-party site is contacted.
 
-The existing `tests/test_*.py` files are manual scripts that issue live requests at import time. Do not use broad test discovery over that directory for offline verification; use the named modules above.
+The existing `tests/test_*.py` files are manual network checks. Importing them does not issue requests; invoking them directly still uses external services. Use the named modules above for offline regression verification.

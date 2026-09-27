@@ -1,8 +1,16 @@
 import os
 import time
-import requests
+
+from pathlib import Path
+import sys
+
+if __package__ in {None, ''}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from cli_support import CommandError, cli_entrypoint
 
 def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampled_site"):
+    import requests
     cdx_api_url = "https://web.archive.org/cdx/search/cdx"
 
     # Parameters for the CDX API query (sorted chronologically by default)
@@ -14,13 +22,14 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
     }
 
     print(f"[*] Querying Wayback Machine index for: {domain}...")
-    response = requests.get(cdx_api_url, params=params)
-
-    if response.status_code != 200:
-        print(f"[!] Error fetching CDX index: {response.status_code}")
-        return
-
-    data = response.json()
+    response = requests.get(cdx_api_url, params=params, timeout=15)
+    try:
+        response.raise_for_status()
+        data = response.json()
+    finally:
+        response.close()
+    if not isinstance(data, list) or any(not isinstance(row, list) for row in data):
+        raise CommandError('Wayback returned an unexpected index response. Try again later.')
     if len(data) <= 1:
         print("[!] No archived records found for this domain.")
         return
@@ -68,6 +77,7 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
 
     os.makedirs(output_dir, exist_ok=True)
 
+    failures = 0
     for row_dict in selected_rows:
         timestamp = row_dict['timestamp']
         original_url = row_dict['original']
@@ -96,19 +106,26 @@ def fetch_sampled_wayback_site(domain, sample_count=2, output_dir="wayback_sampl
         try:
             print(f"[+] Downloading: {original_url} (Timestamp: {timestamp})")
             file_res = requests.get(archive_file_url, timeout=15)
-            if file_res.status_code == 200:
+            try:
+                file_res.raise_for_status()
                 with open(local_filepath, "wb") as f:
                     f.write(file_res.content)
-            else:
-                print(f"[-] Failed to fetch asset. Status: {file_res.status_code}")
-        except Exception as e:
-            print(f"[-] Error downloading {original_url}: {e}")
+            finally:
+                file_res.close()
+        except (requests.RequestException, OSError):
+            failures += 1
+            print('[-] An archived asset could not be downloaded or saved.', file=sys.stderr)
 
         time.sleep(1.0)
 
+    if failures:
+        raise CommandError(f"{failures} archived downloads failed. Earlier successful files have been saved.")
     print(f"\n[*] Done! Sampled files saved to folder: '{output_dir}'")
 
-# Example usage:
-if __name__ == "__main__":
-    target_domain = "www.ahsca.org.au" # Replace with your target website domain
-    fetch_sampled_wayback_site(target_domain, sample_count=2)
+@cli_entrypoint('Wayback download')
+def main():
+    fetch_sampled_wayback_site('www.ahsca.org.au', sample_count=2)
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

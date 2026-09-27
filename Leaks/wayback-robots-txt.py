@@ -1,6 +1,13 @@
 import os
-import requests
 import re
+
+from pathlib import Path
+import sys
+
+if __package__ in {None, ''}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from cli_support import CommandError, cli_entrypoint
 
 def extract_paths_from_robots(content):
     """Parses robots.txt content and extracts paths from Disallow, Allow, and Sitemap lines."""
@@ -29,6 +36,7 @@ def extract_paths_from_robots(content):
     return urls
 
 def scrape_wayback_robots(domain, output_filename="robots_extracted_urls.txt"):
+    import requests
     cdx_api_url = "https://web.archive.org/cdx/search/cdx"
 
     # Query specifically for robots.txt snapshots of the target domain
@@ -40,13 +48,14 @@ def scrape_wayback_robots(domain, output_filename="robots_extracted_urls.txt"):
     }
 
     print(f"[*] Querying Wayback Machine for robots.txt snapshots of: {domain}...")
-    response = requests.get(cdx_api_url, params=params)
-
-    if response.status_code != 200:
-        print(f"[!] Error fetching CDX index: {response.status_code}")
-        return
-
-    data = response.json()
+    response = requests.get(cdx_api_url, params=params, timeout=15)
+    try:
+        response.raise_for_status()
+        data = response.json()
+    finally:
+        response.close()
+    if not isinstance(data, list) or any(not isinstance(row, list) for row in data):
+        raise CommandError('Wayback returned an unexpected index response. Try again later.')
     if len(data) <= 1:
         print("[!] No archived robots.txt records found for this domain.")
         return
@@ -65,6 +74,7 @@ def scrape_wayback_robots(domain, output_filename="robots_extracted_urls.txt"):
     all_extracted_paths = set()
 
     # Loop through historical snapshots of robots.txt to capture everything over time
+    failures = 0
     for entry in rows:
         row_dict = dict(zip(headers, entry))
         timestamp = row_dict['timestamp']
@@ -73,19 +83,20 @@ def scrape_wayback_robots(domain, output_filename="robots_extracted_urls.txt"):
 
         try:
             res = requests.get(archive_url, timeout=10)
-            if res.status_code == 200:
+            try:
+                res.raise_for_status()
                 paths = extract_paths_from_robots(res.text)
-                for p in paths:
-                    # Construct full URL format
-                    if p.startswith('http://') or p.startswith('https://'):
-                        full_url = p
+                for path in paths:
+                    if path.startswith(('http://', 'https://')):
+                        full_url = path
                     else:
-                        base = f"https://{domain}"
-                        full_url = f"{base}{p if p.startswith('/') else '/' + p}"
+                        full_url = f"https://{domain}{path if path.startswith('/') else '/' + path}"
                     all_extracted_paths.add(full_url)
-        except Exception as e:
-            # Silently pass minor connection dropouts during bulk iteration
-            continue
+            finally:
+                res.close()
+        except requests.RequestException:
+            failures += 1
+            print('[-] An archived robots.txt request failed.', file=sys.stderr)
 
     # Filter out what's already saved in the file
     new_urls = all_extracted_paths - existing_urls
@@ -96,9 +107,15 @@ def scrape_wayback_robots(domain, output_filename="robots_extracted_urls.txt"):
             for url in sorted(new_urls):
                 f.write(url + "\n")
         print(f"[*] Successfully appended new URLs to '{output_filename}'.")
-    else:
+    elif not failures:
         print("[*] No new unique URLs found. The output file is already up to date.")
+    if failures:
+        raise CommandError(f"{failures} archived robots.txt requests failed. Earlier successful results have been saved.")
 
-if __name__ == "__main__":
-    target_domain = "www.ahsca.org.au"  # Replace with your target domain
-    scrape_wayback_robots(target_domain)
+@cli_entrypoint('Wayback robots lookup')
+def main():
+    scrape_wayback_robots('www.ahsca.org.au')
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

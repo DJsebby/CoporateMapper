@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from extractor import Extractor
+from enrichment_policy import sanitized_people
 from test_extractor import Driver, page
 
 
@@ -375,7 +376,7 @@ class StaffCardNeo4jTests(unittest.TestCase):
         source = 'https://example.invalid/staff-card-test/' + uuid4().hex
         document = staff_page(url=source, final_url=source)
         with connected_extractor() as extractor:
-            expected = extractor.extract(document)
+            expected = sanitized_people(document)
             self.assertEqual(len(expected), 2)
             keys = [record['identity_key'] for record in expected]
             try:

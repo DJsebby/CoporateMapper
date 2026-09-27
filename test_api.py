@@ -8,7 +8,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from api import Neo4jPeopleStore, create_app
+from api import Neo4jPeopleStore, aggregate_people, create_app
+from enrichment_policy import sanitize_record, sanitized_people
 
 
 def record(name, organisations=None, role=None, date="2026-09-26T00:00:00+00:00", **extra):
@@ -59,7 +60,7 @@ class PeopleApiTests(unittest.TestCase):
         self.assertEqual(body["people"][0], {
             "id": "alice", "names": ["Alice New Name", "Alice Example"],
             "job_titles": ["Lead", "Engineer"], "organisations": ["acme", "Beta"],
-            "score": None, "evidence_count": 2,
+            "score": None, "evidence_count": 2, "image_urls": [],
         })
         self.assertTrue(all(person["score"] is None for person in body["people"]))
         self.assertNotIn("evidence", body["people"][0])
@@ -88,12 +89,13 @@ class PeopleApiTests(unittest.TestCase):
             with self.subTest(params=params):
                 self.assertEqual(self.client.get("/api/people", params=params).status_code, 422)
 
-    def test_detail_preserves_original_evidence_and_uses_targeted_read(self):
+    def test_detail_minimizes_original_evidence_and_uses_targeted_read(self):
         response = self.client.get("/api/people/alice")
         self.assertEqual(response.status_code, 200)
         person = response.json()
-        self.assertEqual(person["evidence"], [self.new, self.old])
-        self.assertEqual(person["emails"], ["alice@example.invalid"])
+        self.assertEqual(person["evidence"], [sanitize_record(self.new), sanitize_record(self.old)])
+        self.assertEqual(person["emails"], [])
+        self.assertNotIn("record", person["evidence"][0]["evidence"])
         self.assertEqual(person["score"], None)
         self.assertEqual(self.store.reads, ["alice"])
         self.assertEqual(self.client.get("/api/people/missing").status_code, 404)
@@ -106,6 +108,92 @@ class PeopleApiTests(unittest.TestCase):
         self.assertEqual(response.json()["total"], 3)
         self.assertEqual(response.json()["people"][0]["evidence_count"], 2)
         self.assertEqual(self.client.get("/api/people/bad").status_code, 404)
+
+    def test_portraits_keep_latest_first_deduplicate_and_reject_unsafe_urls(self):
+        self.old["image_urls"] = ["https://example.invalid/old.jpg", "https://example.invalid/shared.jpg"]
+        self.new["image_urls"] = [
+            "https://example.invalid/new.jpg", "https://example.invalid/shared.jpg",
+            "javascript:alert(1)", "data:image/png;base64,AA", "/relative.jpg",
+            "https://user:secret@example.invalid/photo.jpg", "https://[invalid/photo.jpg",
+            "https://example.invalid:invalid/photo.jpg", "https://example.invalid/a b.jpg",
+            "https://example.invalid/a\x00.jpg", "https://example.invalid/a\\b.jpg",
+            None, 42,
+        ]
+        self.store.rows = [{"id": "alice", "records": [json.dumps(self.old), json.dumps(self.new)]}]
+        expected = ["https://example.invalid/new.jpg", "https://example.invalid/shared.jpg", "https://example.invalid/old.jpg"]
+        summary = self.client.get("/api/people").json()["people"][0]
+        detail = self.client.get("/api/people/alice").json()
+        self.assertEqual(summary["image_urls"], expected)
+        self.assertEqual(detail["image_urls"], expected)
+        self.assertEqual(detail["evidence"], [sanitize_record(self.new), sanitize_record(self.old)])
+        self.assertIsNone(summary["score"])
+
+    def test_missing_or_malformed_images_and_rows_preserve_people(self):
+        self.new["image_urls"] = {"url": "https://example.invalid/photo.jpg"}
+        self.store.rows[0]["records"] = [json.dumps(self.new)]
+        self.store.rows.extend([None, [], "invalid row", {"id": "broken", "records": None}])
+        response = self.client.get("/api/people")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total"], 3)
+        self.assertTrue(all(person["image_urls"] == [] for person in response.json()["people"]))
+
+    def test_legacy_sensitive_data_and_raw_source_json_are_filtered(self):
+        unsafe = record("Alex Example", ["Example Labs"], "Engineer", emails=["personal@example.invalid"],
+                        telephones=["0412 345 678"], religion="SecretReligion", sexual_orientation="SecretOrientation")
+        unsafe["evidence"]["record"] = {"name": "Alex Example", "religion": "SecretReligion", "description": "Secret biography", "address": {"streetAddress": "12 Secret Road"},
+            "contactPoint": {"contactType": "business", "email": "work@example.invalid", "telephone": "+61 8 1234 5678"}}
+        self.store.rows = [{"id": "alex", "records": [json.dumps(unsafe)]}]
+        response = self.client.get("/api/people/alex")
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        self.assertEqual(result["emails"], ["work@example.invalid"])
+        self.assertEqual(result["telephones"], ["+61 8 1234 5678"])
+        self.assertNotIn("Secret", response.text)
+        self.assertNotIn("personal@example.invalid", response.text)
+        self.assertNotIn("0412 345 678", response.text)
+        self.assertNotIn('"record":', response.text)
+        for finding in result["findings"]:
+            self.assertEqual(finding["source_url"], "https://example.invalid/team")
+            self.assertEqual(finding["source_name"], "example.invalid")
+            self.assertEqual(finding["observed_at"], "2026-09-26T00:00:00+00:00")
+            self.assertTrue(finding["evidence"] and finding["method"])
+
+    def test_findings_deduplicate_observations_preserve_conflicts_and_dismiss_per_person(self):
+        engineer = record("Alex Example", ["Example Labs"], "Engineer")
+        repeated = record("Alex Example", ["Example Labs"], "Engineer", date="2026-09-27T00:00:00+00:00")
+        manager = record("Alex Example", ["Example Labs"], "Manager")
+        rows = [{"id": "alex", "records": [json.dumps(v) for v in (engineer, repeated, manager)]},
+                {"id": "namesake", "records": [json.dumps(engineer)]}]
+        people = {p["id"]: p for p in aggregate_people(rows)}
+        self.assertEqual({f["value"] for f in people["alex"]["findings"]}, {"Engineer", "Manager"})
+        engineer_fact = next(f for f in people["alex"]["findings"] if f["value"] == "Engineer")
+        self.assertEqual(engineer_fact["observed_at"], "2026-09-27T00:00:00+00:00")
+        dismissed = {p["id"]: p for p in aggregate_people(rows, {"alex": {engineer_fact["id"]}})}
+        self.assertEqual(dismissed["alex"]["job_titles"], ["Manager"])
+        self.assertEqual(dismissed["namesake"]["job_titles"], ["Engineer"])
+        self.assertNotIn("Engineer", json.dumps(dismissed["alex"]["evidence"]))
+
+    def test_dismissed_same_as_profile_does_not_survive_in_an_alias(self):
+        original = record("Alex Example", same_as=["https://profiles.example.invalid/alex"])
+        rows = [{"id": "alex", "records": [json.dumps(original)]}]
+        finding = aggregate_people(rows)[0]["findings"][0]
+        dismissed = aggregate_people(rows, {"alex": {finding["id"]}})[0]
+        self.assertEqual(dismissed["profile_urls"], [])
+        self.assertEqual(dismissed["same_as"], [])
+        self.assertNotIn("https://profiles.example.invalid/alex", json.dumps(dismissed["evidence"]))
+
+    def test_unsourced_findings_and_invalid_legacy_roles_are_not_displayed(self):
+        original = record("Alex Example", role="12 Secret Road", emails=["private@example.invalid"],
+                          same_as=["https://profiles.example.invalid/alex"])
+        original["evidence"]["source_url"] = ""
+        self.store.rows = [{"id": "alex", "records": [json.dumps(original)]}]
+        response = self.client.get("/api/people/alex")
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        for field in ("job_titles", "emails", "profile_urls", "same_as", "findings"):
+            self.assertEqual(result[field], [])
+        self.assertNotIn("12 Secret Road", response.text)
+        self.assertNotIn("private@example.invalid", response.text)
 
     def test_empty_database(self):
         self.store.rows = []
@@ -206,9 +294,10 @@ class LivePeopleApiTests(unittest.TestCase):
         organisation = "UI Test Organisation " + token
         page = PageDocument.now(url=url, final_url=url, status_code=200, content_type="text/html", html="")
         page.structured_data = [{"@type": "Person", "@id": url + "#person", "name": "UI Test Person",
-                                 "jobTitle": "Test Engineer", "worksFor": organisation}]
+                                 "jobTitle": "Test Engineer", "worksFor": organisation,
+                                 "image": {"@type": "ImageObject", "contentUrl": "/portraits/test.jpg"}}]
         with connected_extractor() as extractor:
-            expected = extractor.extract(page)[0]
+            expected = sanitized_people(page)[0]
             key = expected["identity_key"]
             try:
                 extractor.process(page)
@@ -223,9 +312,11 @@ class LivePeopleApiTests(unittest.TestCase):
                     self.assertEqual(person["id"], key)
                     self.assertEqual(person["names"], ["UI Test Person"])
                     self.assertEqual(person["job_titles"], ["Test Engineer"])
+                    self.assertEqual(person["image_urls"], ["https://example.invalid/portraits/test.jpg"])
                     self.assertIsNone(person["score"])
                     detail = client.get("/api/people/" + key).json()
                     self.assertEqual(detail["evidence"], [expected])
+                    self.assertEqual(detail["image_urls"], person["image_urls"])
                     self.assertIsNone(detail["score"])
             finally:
                 with extractor.driver.session(database=extractor.database) as session:

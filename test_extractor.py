@@ -7,6 +7,7 @@ import os
 from uuid import uuid4
 from datetime import datetime, timezone
 from extractor import Extractor
+from enrichment_policy import sanitized_people
 from crawler.models import PageDocument
 
 
@@ -152,7 +153,7 @@ class Neo4jIntegrationTests(unittest.TestCase):
             {'@type': 'Person', '@id': url + '#bob', 'name': 'Bob Example'},
         ], url=url, final_url=url)
         with connected_extractor() as extractor:
-            expected = extractor.extract(document)
+            expected = sanitized_people(document)
             self.assertEqual([p['confidence'] for p in expected], [1.0, 0.75])
             keys = [p['identity_key'] for p in expected]
             try:

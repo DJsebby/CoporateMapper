@@ -66,6 +66,7 @@ def site_fixture(stack, base):
 
     def request(method, url, **kwargs):
         response = requests.Response()
+        response._content_consumed = True
         response.url = url
         response.status_code = 200
         if method.upper() == 'HEAD' and url in urls + [base + '/sitemap.xml']:

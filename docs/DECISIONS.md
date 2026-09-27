@@ -48,3 +48,18 @@ Record only decisions explicitly approved by the CEO. A template is not a decisi
 - **Reason:** The CEO requested the smallest Python equivalent of the supplied HTTP client example.
 - **Approved By:** CEO, explicit request dated 2026-09-26.
 - **Consequences / Constraints:** Preserve the plain name/company/role query, top-10 request, and local `SERPER_API_KEY`; do not execute live searches during implementation.
+
+### DEC-005 — Bounded Australian enrichment and shared fixture transport
+
+- **Date:** 2026-09-27
+- **Decision:** Implement the approved Australian professional-information aggregation plan using a shared rules-based enrichment engine for real and built-in fictional demo inputs. Use Neo4j for progress, evidence, allowances, cache and dismissals, with one local background worker. Keep Gemini Flash in a dedicated authored-fixture evaluation command only.
+- **Approved By:** User's explicit implementation request and subsequent shared real/demo pipeline clarification.
+- **Constraints:** Confirm employee Australian work context; one quoted Australian Serper search/employee/run, ten results, 15 page attempts, seven-day eligible cache, original source per finding and uncertain-identity review. No arbitrary fictional override or real employee data sent to Google; no sensitive attributes or personal/home contacts. No shared deployment, scoring, monitoring or historical raw-database cleanup. This supersedes DEC-004's unquoted query behavior for the name utility.
+
+
+### DEC-006 — Fictional table-to-context proof of concept
+
+- **Date:** 2026-09-27
+- **Decision:** Add explicit per-person population to the real UI and a separate built-in fictional table-to-Gemini workflow, with full and incomplete synthetic profiles and authored personal/sensitive examples. Context covers profile summary, missing fields and general privacy implications with source references.
+- **Approved By:** User's explicit implementation request and clarification selecting summary, gaps and privacy implications.
+- **Constraints:** Real evidence exclusions remain intact. Only canonical built-in fictional content can reach Gemini; no caller-provided content or arbitrary employee override. Save the table before the model call, preserve it on failures and require explicit retries. This supersedes DEC-005's restriction to a standalone Gemini CLI for the authored demo only.

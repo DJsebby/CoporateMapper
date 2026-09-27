@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import cytoscape, { type Core } from 'cytoscape'
 import { personName, position, type Person } from './types'
+import PersonAvatar from './PersonAvatar'
 
 export function PersonCard({ person, selected }: { person: Person; selected?: boolean }) {
   return <article className={`person-card ${selected ? 'selected' : ''}`}>
-    <div className="person-card-heading"><span className="avatar">{personName(person).split(' ').slice(0, 2).map(n => n[0]).join('')}</span><div className="min-w-0"><h3 title={personName(person)}>{personName(person)}</h3><p title={position(person)}>{position(person)}</p></div></div>
+    <div className="person-card-heading"><PersonAvatar person={person}/><div className="min-w-0"><h3 title={personName(person)}>{personName(person)}</h3><p title={position(person)}>{position(person)}</p></div></div>
     <div className="person-card-footer"><span className="score">Score <strong>-</strong></span><a href={`#person/${encodeURIComponent(person.id)}`} aria-label={`View details for ${personName(person)}`}>View details <span aria-hidden="true">↗</span></a></div>
   </article>
 }

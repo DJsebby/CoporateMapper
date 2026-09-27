@@ -37,6 +37,108 @@ def _url(value: Any, base: str) -> str:
         return ""
 
 
+def _image_url(value: Any, base: str) -> str:
+    """Accept usable public image links, without fetching their contents."""
+    if not isinstance(value, str):
+        return ""
+    value = value.strip()
+    if (not value or value.startswith(("#", "_:"))
+            or re.search(r"[\s\x00-\x1f\x7f\\]", value)):
+        return ""
+    try:
+        supplied = urlsplit(value)
+        if (supplied.scheme or value.startswith("//")) and not supplied.hostname:
+            return ""
+        resolved = urljoin(base, value)
+        parts = urlsplit(resolved)
+        if (parts.scheme.lower() not in {"http", "https"} or not parts.hostname
+                or parts.username is not None or parts.password is not None):
+            return ""
+        parts.port  # Reject malformed/out-of-range ports before storing the link.
+        return resolved
+    except ValueError:
+        return ""
+
+
+def _image_values(value: Any, base: str, index: dict, active=frozenset()) -> list[str]:
+    """Read only explicit image fields and local ImageObject references."""
+    if isinstance(value, list):
+        return _unique([url for item in value for url in _image_values(item, base, index, active)])
+    if not isinstance(value, (str, dict)):
+        return []
+    reference = value if isinstance(value, str) else value.get("@id")
+    key = _url(reference, base)
+    if key and key in index:
+        if key in active:
+            return [url] if isinstance(value, str) and (url := _image_url(value, base)) else []
+        definition = index[key]
+        value = {**definition, **value} if isinstance(value, dict) else definition
+        active = active | {key}
+    if isinstance(value, str):
+        return [url] if (url := _image_url(value, base)) else []
+    kinds = [_schema(_text(kind)) for kind in _list(value.get("@type")) if _text(kind)]
+    if kinds and "ImageObject" not in kinds:
+        return []  # A nested Person/organisation does not describe this person's image.
+    fields = [value[prop] for prop in ("contentUrl", "url", "@value") if prop in value]
+    if fields:
+        return _unique([url for field in fields for url in _image_values(field, base, index, active)])
+    return [url] if (url := _image_url(value.get("@id"), base)) else []
+
+
+_STAFF_CARDS = {'team-link', 'team-member', 'staff-card', 'person-card', 'team-card', 'staff-member'}
+_NON_PORTRAIT = re.compile(
+    r"(?:^|[^a-z0-9])(?:logo|icon|favicon|sprite|spacer|placeholder|loading|blank)(?:[^a-z0-9]|$)",
+    re.I,
+)
+
+
+def _srcset_values(value: Any) -> list[str]:
+    """Read URL tokens while keeping data-URL commas inside their invalid URL."""
+    if not isinstance(value, str):
+        return []
+    urls = []
+    remaining = value.strip()
+    while remaining:
+        remaining = remaining.lstrip(" ,\t\r\n")
+        match = re.match(r"([^\s]+)(.*)", remaining, re.S)
+        if not match:
+            break
+        url, remaining = match.groups()
+        if url.endswith(","):
+            urls.append(url.rstrip(","))
+        else:
+            descriptor, separator, remaining = remaining.partition(",")
+            descriptor = descriptor.strip()
+            if not descriptor or re.fullmatch(r"(?:[1-9]\d*w|(?:\d+(?:\.\d+)?|\.\d+)x)", descriptor):
+                urls.append(url)
+            if not separator:
+                break
+    return urls
+
+
+def _html_images(node) -> list[str]:
+    """Use images in the owning element; image alt text never supplies a name."""
+    attrs = node["attrs"]
+    description = " ".join(_text(attrs.get(key)) for key in ("class", "id", "alt"))
+    if (_NON_PORTRAIT.search(description) or attrs.get("role") == "presentation"
+            or attrs.get("aria-hidden") == "true"):
+        return []
+    if node["tag"] == "picture":
+        return _unique([url for child in node["children"]
+                        if isinstance(child, dict) and "itemscope" not in child["attrs"]
+                        for url in _html_images(child)])
+    if node["tag"] not in {"img", "source"}:
+        return []
+    dimensions = [_text(attrs.get(key)) for key in ("width", "height")]
+    if all(value.isdigit() and int(value) <= 32 for value in dimensions):
+        return []
+    values = [attrs.get(key) for key in ("src", "data-src", "data-lazy-src", "data-original", "data-original-src")]
+    for key in ("srcset", "data-srcset", "data-lazy-srcset"):
+        values.extend(_srcset_values(attrs.get(key)))
+    return _unique([value for value in values if isinstance(value, str)
+                    and not _NON_PORTRAIT.search(value.split("?", 1)[0].split("/")[-1])])
+
+
 def _schema(value: str) -> str:
     for prefix in ("https://schema.org/", "http://schema.org/"):
         if value.startswith(prefix):
@@ -123,19 +225,28 @@ class _MicrodataParser(HTMLParser):
             record["@id"] = attrs["itemid"]
         visited = set()
 
-        def collect(child):
+        def collect(child, in_nested_card=False):
             if isinstance(child, str) or id(child) in visited or id(child) in active:
                 return
             visited.add(id(child))
+            in_nested_card = in_nested_card or bool(
+                set((child["attrs"].get("class") or "").split()) & _STAFF_CARDS
+            )
             properties = (child["attrs"].get("itemprop") or "").split()
             scoped = "itemscope" in child["attrs"]
             if properties:
                 value = self._record(child, active) if scoped else self._value(child)
                 for prop in properties:
-                    record.setdefault(_schema(prop), []).append(value)
+                    prop = _schema(prop)
+                    if prop == "image" and in_nested_card:
+                        continue
+                    if prop == "image" and not scoped and child["tag"] in {"img", "picture", "source"}:
+                        record.setdefault(prop, []).extend(_html_images(child))
+                    else:
+                        record.setdefault(prop, []).append(value)
             if not scoped:
                 for grandchild in child["children"]:
-                    collect(grandchild)
+                    collect(grandchild, in_nested_card)
 
         for child in node["children"]:
             collect(child)
@@ -276,7 +387,7 @@ def _joomla_emails(script: str, cloak_ids: set[str]) -> list[tuple[str, str]]:
 class _StaffCardParser(_MicrodataParser):
     """Read explicit staff-card layouts without treating arbitrary prose as people."""
 
-    _CARDS = {'team-link', 'team-member', 'staff-card', 'person-card', 'team-card', 'staff-member'}
+    _CARDS = _STAFF_CARDS
     _NAMES = {'name', 'person-name', 'staff-name', 'team-name', 'member-name', 't-flags'}
     _ROLES = {'role', 'position', 'job-title', 'member-title', 'team-position'}
     _ORGS = {'organisation', 'organization', 'company'}
@@ -377,6 +488,28 @@ class _StaffCardParser(_MicrodataParser):
             record = {'name': name, 'jobTitle': roles, 'worksFor': organisations,
                       'email': _unique(emails), 'telephone': _unique(phones), 'url': _unique(profiles),
                       '_html_evidence': {'card_classes': sorted(self._classes(card)), 'contacts': contact_evidence}}
+            # An explicit personal-contact label overrides the general employer
+            # staff-card context. Keep this classification local to the card.
+            if re.search(r'\b(?:personal|private|home)\s+(?:e-?mail|phone|telephone|mobile|contact)\b',
+                         self._plain(card), re.I):
+                record['_html_evidence']['personal_contacts'] = True
+            def card_images(node):
+                if node is not card and 'itemscope' in node['attrs'] and not any(
+                    _schema(kind) == 'ImageObject' for kind in (node['attrs'].get('itemtype') or '').split()
+                ):
+                    return []
+                description = " ".join(_text(node['attrs'].get(key)) for key in ('class', 'id'))
+                if _NON_PORTRAIT.search(description) or node['tag'] in {'script', 'style', 'noscript'}:
+                    return []
+                if node['tag'] in {'img', 'picture'}:
+                    return _html_images(node)
+                return [url for child in node['children'] if isinstance(child, dict)
+                        and not self._is_card(child) and not self._is_person_scope(child)
+                        for url in card_images(child)]
+
+            image_values = _unique(card_images(card))
+            if image_values:
+                record['image'] = image_values
             if page_orgs and organisations == page_orgs:
                 record['_html_evidence']['organisation_heading'] = [
                     self._plain(node) for node in self.nodes if node['tag'] == 'h1'
@@ -413,7 +546,7 @@ class Extractor:
     """Extract and persist explicit people; confidence measures completeness.
 
     Results contain list-valued names, job_titles, organisations, profile_urls,
-    same_as, emails, and telephones, plus identity_key, confidence,
+    same_as, emails, and telephones, and optional image_urls, plus identity_key, confidence,
     scoring_reasons, and evidence. No claims are inferred from page prose.
     ``extract`` never accesses the driver (which may be None for offline use).
     """
@@ -518,6 +651,7 @@ class Extractor:
         identity = ["identifier", identifier or profiles[0]] if identifier or profiles else [
             "source_name", base, names[0].casefold()
         ]
+        images = _image_values(record.get("image"), base, index)
         return {
             "identity_key": _key(identity),
             "names": names,
@@ -527,6 +661,7 @@ class Extractor:
             "same_as": _unique([_url(value, base) for value in values("sameAs", url_value=True)]),
             "emails": emails,
             "telephones": phones,
+            **({"image_urls": images} if images else {}),
             "confidence": min(score, 100) / 100,
             "scoring_reasons": reasons,
             "evidence": {
@@ -544,7 +679,11 @@ class Extractor:
         MERGE provides repeatable writes for serial calls. Concurrent uniqueness
         requires database constraints provisioned separately by the caller.
         """
-        people = self.extract(page)
+        from enrichment_policy import sanitized_people
+
+        # Extraction remains inspectable offline; persistence never retains raw
+        # source objects, biographies, personal contacts, or unsupported fields.
+        people = sanitized_people(page, self.extract(page))
         if not people:
             return people
         rows = []
