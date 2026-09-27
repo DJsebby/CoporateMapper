@@ -77,12 +77,15 @@ class DemoProfileWorkflowTests(unittest.TestCase):
                 blank = self.workflow.detail(identity)
                 self.assertFalse(blank['populated'])
                 self.assertEqual(blank['findings'], [])
+                self.assertIsNone(blank['risk_score'])
                 result = self.populate(identity)
                 self.assertEqual(result['status'], 'completed')
                 detail = DemoProfileWorkflow(self.store, generator=self.generator).detail(identity)
                 canonical = profile_for(identity)
                 self.assertTrue(detail['populated'])
                 self.assertEqual(detail['coverage'], coverage)
+                from demo_risk_score import compute_risk_score
+                self.assertEqual(detail['risk_score'], compute_risk_score(identity, detail['findings']))
                 self.assertEqual(detail['findings'], canonical['findings'])
                 self.assertEqual(detail['missing_categories'], canonical['missing_categories'])
                 self.assertEqual(detail['context']['status'], 'completed')
@@ -327,6 +330,26 @@ class DemoProfileApiTests(unittest.TestCase):
 
     def client(self):
         return TestClient(create_app(self.people, self.engine, demo_profiles=self.workflow))
+
+    def test_risk_score_appears_on_the_list_and_detail_endpoints_once_populated_never_for_real_people(self):
+        with patch.object(self.engine, 'start'), patch.object(self.engine, 'close'), self.client() as client:
+            listed = {person['id']: person for person in client.get('/api/people').json()['people']}
+            self.assertIsNone(listed[self.alex]['risk_score'])
+            self.assertIsNone(listed[self.alex]['risk_band'])
+            self.assertIsNone(listed['real-employee']['risk_score'])
+            response = client.post('/api/demo/profiles/' + self.alex + '/populate', json={'idempotency_key': uuid4().hex})
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(self.workflow.run(response.json()['id'])['status'], 'completed')
+            detail = client.get('/api/people/' + self.alex).json()
+            self.assertIsInstance(detail['risk_score'], float)
+            self.assertIn(detail['risk_band'], {'very_low', 'low', 'moderate', 'high', 'very_high'})
+            self.assertEqual(detail['risk_score'], detail['demo_profile']['risk_score']['score'])
+            self.assertEqual(detail['risk_band'], detail['demo_profile']['risk_score']['band'])
+            listed = {person['id']: person for person in client.get('/api/people').json()['people']}
+            self.assertEqual(listed[self.alex]['risk_score'], detail['risk_score'])
+            self.assertEqual(listed[self.alex]['risk_band'], detail['risk_band'])
+            self.assertIsNone(listed['real-employee']['risk_score'])
+            self.assertIsNone(listed['real-employee']['risk_band'])
 
     def test_real_identity_demo_routes_and_payload_overrides_are_rejected_before_model(self):
         with patch.object(self.engine, 'start'), patch.object(self.engine, 'close'), \

@@ -4,7 +4,7 @@ import PersonPanel from './PersonPanel'
 import RecentActivity from './RecentActivity'
 import EnrichmentControls, { useEnrichment } from './Enrichment'
 import CompanyDiscovery, { useDiscovery } from './Discovery'
-import { get, type Organisation, type PeoplePage } from './types'
+import { get, post, type Organisation, type PeoplePage } from './types'
 
 const PAGE_SIZE = 8
 const selection = () => { try { return location.hash.startsWith('#person/') ? decodeURIComponent(location.hash.slice(8)) : null } catch { return null } }
@@ -47,6 +47,40 @@ export default function App() {
     return () => controller.abort()
   }, [organisation, query, offset, refresh])
   const organisationName = organisation.startsWith('org:') ? organisation.slice(4) : null
+  // Selecting a demo organisation auto-populates every fictional employee in it
+  // (table + Gemini context), so their view details are already loaded once
+  // clicked. Never runs for a real organisation; already-populated people are skipped.
+  useEffect(() => {
+    if (!organisationName || !organisationName.includes('(Demo)')) return
+    const orgName = organisationName
+    const controller = new AbortController()
+    let cancelled = false
+    let pollTimer: ReturnType<typeof setTimeout>
+    // The populate+Gemini jobs triggered below run in the background, so the
+    // people list fetched once on org-select would otherwise show stale (still
+    // unscored) data until a manual refresh. Poll until every triggered person's
+    // score has actually landed, refreshing the visible map/list each time.
+    function poll(remaining: number) {
+      if (cancelled || remaining <= 0) return
+      get<PeoplePage>(`/api/people?organisation=${encodeURIComponent(orgName)}&limit=200`, controller.signal)
+        .then(check => {
+          if (cancelled) return
+          setRefresh(value => value + 1)
+          if (check.people.some(person => person.risk_score == null)) pollTimer = setTimeout(() => poll(remaining - 1), 3000)
+        })
+        .catch(() => {})
+    }
+    get<PeoplePage>(`/api/people?organisation=${encodeURIComponent(orgName)}&limit=200`, controller.signal)
+      .then(page => {
+        const pending = page.people.filter(person => person.risk_score == null)
+        for (const person of pending) {
+          void post(`/api/demo/profiles/${encodeURIComponent(person.id)}/populate`, {idempotency_key: crypto.randomUUID()}).catch(() => {})
+        }
+        if (pending.length) pollTimer = setTimeout(() => poll(15), 3000)
+      })
+      .catch(() => {})
+    return () => { cancelled = true; controller.abort(); clearTimeout(pollTimer) }
+  }, [organisationName])
   const title = organisationName || (organisation === 'unassigned' ? 'Unassigned people' : 'All organisations')
   const count = data?.total ?? 0
   function closePanel() { history.replaceState(null,'',location.pathname + location.search); setSelected(null) }

@@ -32,6 +32,8 @@ class PersonSummary(BaseModel):
     organisations: list[str]
     image_urls: list[str] = Field(default_factory=list)
     score: None = None
+    risk_score: float | None = None
+    risk_band: str | None = None
     evidence_count: int
 
 
@@ -438,6 +440,22 @@ def create_app(store: PeopleStore | None = None, enrichment=None, demo_profiles=
             # Database errors may contain addresses or credentials; never return them.
             raise HTTPException(status_code=503, detail="People data is unavailable. Check the local database connection and retry.") from None
 
+    def attach_risk_summaries(page_people):
+        # Bounded to the returned page/single person; a real employee is never
+        # a fixture identity, so this never triggers the demo catalog for them.
+        if demo_profiles is None or not page_people:
+            return
+        from demo import demo_rows
+        fixture_ids = {row["identity_key"] for row in demo_rows()}
+        for person in page_people:
+            if person["id"] not in fixture_ids:
+                continue
+            detail = action(lambda person_id=person["id"]: demo_profiles.detail(person_id))
+            risk = detail.get("risk_score") if detail and detail.get("populated") else None
+            if risk:
+                person["risk_score"] = risk["score"]
+                person["risk_band"] = risk["band"]
+
     @app.get("/api/organisations", response_model=OrganisationList)
     def organisations():
         groups = {}
@@ -477,7 +495,9 @@ def create_app(store: PeopleStore | None = None, enrichment=None, demo_profiles=
             selected = [person for person in selected if any(
                 search in value.casefold() for value in person["names"] + person["job_titles"]
             )]
-        return {"people": selected[offset:offset + limit], "total": len(selected), "offset": offset, "limit": limit}
+        page_people = selected[offset:offset + limit]
+        attach_risk_summaries(page_people)
+        return {"people": page_people, "total": len(selected), "offset": offset, "limit": limit}
 
     @app.get("/api/people/{identity_key}", response_model=PersonDetail)
     def person_details(identity_key: str):
@@ -486,6 +506,10 @@ def create_app(store: PeopleStore | None = None, enrichment=None, demo_profiles=
             if person["id"] == identity_key:
                 if demo_profiles is not None:
                     person["demo_profile"] = action(lambda: demo_profiles.detail(identity_key))
+                    risk = person["demo_profile"].get("risk_score") if person["demo_profile"] and person["demo_profile"].get("populated") else None
+                    if risk:
+                        person["risk_score"] = risk["score"]
+                        person["risk_band"] = risk["band"]
                 return person
         raise HTTPException(status_code=404, detail="Person not found.")
 

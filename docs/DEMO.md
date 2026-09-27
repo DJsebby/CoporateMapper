@@ -1,6 +1,6 @@
 # Demo data
 
-The demo creates 17 fictional people using the real extractor's parsing and confidence logic, then stores their person/evidence records with explicit demo ownership markers. It makes no network requests to the fictional sources.
+The demo creates 23 fictional people using the real extractor's parsing and confidence logic, then stores their person/evidence records with explicit demo ownership markers. It makes no network requests to the fictional sources.
 
 ## Load the demo
 
@@ -17,10 +17,11 @@ Refresh the People map at <http://localhost:8000> (see [UI.md](UI.md) to start i
 
 - **Meridian Labs (Demo):** 12 people, enough to exercise pagination.
 - **Northstar Advisory (Demo):** five people, including one advisor shared with Meridian.
+- **Beacon Financial (Demo):** six people in distinct executive/support roles (marketing, finance, legal, technology, executive support, IT support).
 - **Unassigned:** one person with no recorded organisation.
 - One person without a position, plus fictional contacts, profiles, and source evidence for inspecting details.
 
-There are 17 distinct people, despite the shared advisor appearing in both organisation counts. UI scores remain `-`.
+There are 23 distinct people, despite the shared advisor appearing in both Meridian/Northstar organisation counts. UI scores remain `-` for real employees; fictional demo people additionally have a fictional 1-10 risk score once populated (see [ENRICHMENT.md](ENRICHMENT.md)).
 
 The demo uses stable IDs, source URLs, and timestamps. Run the command again to restore missing demo data without adding duplicate records. Run seed and cleanup commands sequentially, not concurrently; database uniqueness constraints remain outside this task.
 

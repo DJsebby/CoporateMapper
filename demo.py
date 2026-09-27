@@ -37,6 +37,15 @@ def demo_pages(dataset=DEMO_DATASET):
             ('Robin Ellis', 'Research Analyst'), ('Sage Parker', ''),
         ]),
         (None, [('Charlie Reed', 'Independent Researcher')]),
+        # Appended after the original 17, never inserted earlier: each person's
+        # number (and therefore their stable URL/identity_key) must never shift,
+        # or a database already seeded under the old numbering merges a new
+        # person's fresh evidence with whichever old identity used to hold that number.
+        ('Beacon Financial (Demo)', [
+            ('Nadia Kim', 'Marketing Director'), ('Owen Bright', 'Finance Manager'),
+            ('Priya Anand', 'Legal Counsel'), ('Felix Turner', 'Chief Technology Officer'),
+            ('Grace Liu', 'Executive Assistant'), ('Marcus Webb', 'IT Support Specialist'),
+        ]),
     ]
     pages = []
     number = 0
@@ -160,10 +169,39 @@ def delete_demo(driver, database='neo4j', dataset=DEMO_DATASET):
         return session.execute_write(remove)
 
 
+def refresh_demo(driver, database='neo4j', dataset=DEMO_DATASET):
+    """Fully wipe and reseed this demo dataset, ignoring delete_demo's
+    conservative retention. All demo data is fictional and disposable, so this
+    also removes enrichment-added findings (skills, risk factors, etc.) and
+    demo enrichment/profile jobs, which delete_demo intentionally never touches.
+    """
+    def wipe(tx):
+        dataset_nodes = tx.run(
+            'MATCH (n) WHERE n.demo_dataset = $dataset DETACH DELETE n RETURN count(n) AS count',
+            dataset=dataset).single()['count']
+        enrichment_evidence = tx.run(
+            "MATCH (n:PersonEvidence) WHERE n.enrichment_namespace = 'demo' DETACH DELETE n RETURN count(n) AS count"
+        ).single()['count']
+        jobs = tx.run(
+            "MATCH (j:EnrichmentJob) WHERE j.namespace = 'demo' DETACH DELETE j RETURN count(j) AS count"
+        ).single()['count']
+        orphans = tx.run(
+            'MATCH (p:Person) WHERE NOT EXISTS { MATCH (p)--() } DELETE p RETURN count(p) AS count'
+        ).single()['count']
+        return dict(dataset_nodes_deleted=dataset_nodes, enrichment_evidence_deleted=enrichment_evidence,
+                    jobs_deleted=jobs, orphans_deleted=orphans)
+
+    with driver.session(database=database) as session:
+        cleanup = session.execute_write(wipe)
+    return {**cleanup, **seed_demo(driver, database, dataset)}
+
+
 @cli_entrypoint('Demo', hint='Check Neo4j settings and service availability. The current demo transaction was not confirmed.')
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--delete', action='store_true', help='Remove only owned demo records; preserve all unrelated data.')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--delete', action='store_true', help='Remove only owned demo records; preserve all unrelated data.')
+    group.add_argument('--refresh', action='store_true', help='Delete ALL demo data (including enrichment findings and demo jobs) and reseed from scratch.')
     args = parser.parse_args(argv)
     with connected_extractor() as extractor:
         if args.delete:
@@ -171,6 +209,12 @@ def main(argv=None):
             print(f"Deleted {result['people_deleted']} demo people and {result['evidence_deleted']} demo evidence records.")
             if result['nodes_retained']:
                 print(f"Kept {result['nodes_retained']} nodes with additional links or changed data.")
+        elif args.refresh:
+            result = refresh_demo(extractor.driver, extractor.database)
+            print(f"Refreshed: removed {result['dataset_nodes_deleted']} base demo nodes, "
+                  f"{result['enrichment_evidence_deleted']} enrichment evidence records and {result['jobs_deleted']} demo jobs. "
+                  f"Reseeded {result['people']} fictional people.")
+            print('Run `.venv/bin/python enrich.py --demo` next to repopulate skills, qualifications and other enrichment findings.')
         else:
             result = seed_demo(extractor.driver, extractor.database)
             print(f"Demo ready: {result['people']} fictional people. Re-running does not duplicate them.")

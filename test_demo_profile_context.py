@@ -33,7 +33,7 @@ class DemoProfileFixtureTests(unittest.TestCase):
 
     def test_catalog_uses_exact_original_ids_and_full_partial_minimal_data(self):
         self.assertEqual(set(self.profiles), {row['identity_key'] for row in demo_rows()})
-        self.assertEqual(len(self.profiles), 17)
+        self.assertEqual(len(self.profiles), 23)
         alex, jordan, sam = (self.by_name[name] for name in ('Alex Morgan', 'Jordan Lee', 'Sam Taylor'))
         self.assertEqual((alex['coverage'], jordan['coverage'], sam['coverage']), ('full', 'partial', 'minimal'))
         self.assertEqual(alex['missing_categories'], [])

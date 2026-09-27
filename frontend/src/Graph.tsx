@@ -6,7 +6,7 @@ import PersonAvatar from './PersonAvatar'
 export function PersonCard({ person, selected }: { person: Person; selected?: boolean }) {
   return <article className={`person-card ${selected ? 'selected' : ''}`}>
     <div className="person-card-heading"><PersonAvatar person={person}/><div className="min-w-0"><h3 title={personName(person)}>{personName(person)}</h3><p title={position(person)}>{position(person)}</p></div></div>
-    <div className="person-card-footer"><span className="score">Score <strong>-</strong></span><a href={`#person/${encodeURIComponent(person.id)}`} aria-label={`View details for ${personName(person)}`}>View details <span aria-hidden="true">↗</span></a></div>
+    <div className="person-card-footer">{person.risk_band ? <span className={`score risk-${person.risk_band}`}>Risk <strong>{person.risk_score?.toFixed(1)}</strong></span> : <span className="score">Score <strong>-</strong></span>}<a href={`#person/${encodeURIComponent(person.id)}`} aria-label={`View details for ${personName(person)}`}>View details <span aria-hidden="true">↗</span></a></div>
   </article>
 }
 

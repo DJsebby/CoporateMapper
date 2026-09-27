@@ -67,7 +67,9 @@ class SafeCompanyPipelineTests(unittest.TestCase):
                 return response(404, '', 'text/plain')
             if url==BASE+'/':
                 return response(body='<a href="/team">Team</a>')
-            self.fail('Disallowed content was requested: '+url)
+            if url==BASE+'/team':
+                self.fail('Disallowed content was requested: '+url)
+            return response(404, '', 'text/plain')
         with patch.object(LiveSources,'_request',autospec=True,side_effect=request),patch('enrichment_sources.time.sleep'):
             with Pipeline(Extractor(RecordingDriver())) as runner:
                 report=runner.run(BASE)
@@ -109,6 +111,37 @@ class SafeCompanyPipelineTests(unittest.TestCase):
         self.assertLessEqual(len([url for url in requested if url.endswith('.xml')]),2)
         self.assertIn('candidate URL limit',discoverer.last_failures)
         self.assertIn('sitemap limit',discoverer.last_failures)
+
+    def test_missing_sitemap_falls_back_to_team_page_wordlist_and_finds_a_person_two_levels_deep(self):
+        person = {'@type':'Person','@id':BASE+'/contact/meet-us/alex','name':'Alex Example','jobTitle':'Engineer',
+                  'worksFor':{'@type':'Organization','name':'Fictional Company'}}
+        bodies = {
+            BASE+'/robots.txt': response(body='User-agent: *', media='text/plain'),
+            BASE+'/': response(body='<a href="/about">About</a>'),
+            BASE+'/sitemap.xml': response(404, '', 'text/plain'),
+            BASE+'/about': response(body='<html>Fictional about page with no team link</html>'),
+            BASE+'/contact/meet-us': response(body='<script type="application/ld+json">'+json.dumps(person)+'</script>'),
+        }
+        def request(_, url, deadline, max_bytes=None):
+            return bodies.get(url, response(404, '', 'text/plain'))
+        with patch.object(LiveSources, '_request', autospec=True, side_effect=request), patch('enrichment_sources.time.sleep'):
+            with Pipeline(Extractor(RecordingDriver())) as runner:
+                report = runner.run(BASE)
+        self.assertEqual(report.records_stored, 1)
+        self.assertTrue(any(page.url == BASE+'/contact/meet-us' and page.status == 'stored' for page in report.pages))
+
+    def test_working_sitemap_skips_the_wordlist_fallback(self):
+        bodies = {
+            BASE+'/robots.txt': response(body='User-agent: *', media='text/plain'),
+            BASE+'/': response(body='<a href="/team">Team</a>'),
+            BASE+'/sitemap.xml': response(body='<urlset><url><loc>/team</loc></url></urlset>', media='application/xml'),
+        }
+        def request(_, url, deadline, max_bytes=None):
+            return bodies.get(url, response(404, '', 'text/plain'))
+        with patch.object(LiveSources, '_request', autospec=True, side_effect=request), patch('enrichment_sources.time.sleep'):
+            discoverer = PublicWebsiteDiscoverer()
+            urls = discoverer.discover(BASE)
+        self.assertEqual(urls, [BASE+'/', BASE+'/team'])
 
     def test_unsafe_xml_and_malformed_sitemaps_do_not_hide_valid_root_links(self):
         for body in ['<!DOCTYPE urlset [<!ENTITY x "secret">]><urlset/>', '<notclosed']:

@@ -139,6 +139,13 @@ class Pipeline:
         eligible = [item for item in ranked if min_score <= item.score <= max_score]
         report.eligible_count = len(eligible)
         selected = eligible[:max_pages]
+        # A website supplied directly by the caller (e.g. a specific team-page
+        # URL pasted into the UI) is a deliberate request, not a speculative
+        # crawl target: always attempt it, even if its OSINT-relevance score or
+        # the page budget would otherwise have excluded it from prioritisation.
+        entry_item = next((item for item in ranked if item.url == base_url), None)
+        if entry_item is not None and not any(item.url == base_url for item in selected):
+            selected = [entry_item] + selected[:max(0, max_pages - 1)]
         report.selected_count = len(selected)
         identities = set()
         for item in selected:

@@ -20,6 +20,11 @@ _LABELS = {
     'australian_work_context': 'work country', 'religion': 'religion',
     'sexual_orientation': 'sexual orientation', 'home_address': 'home address',
     'personal_email': 'personal email',
+    'age_bracket': 'age bracket', 'gender': 'gender', 'computer_knowledge': 'computer knowledge',
+    'network_security_knowledge': 'network security knowledge', 'security_behavior_level': 'security behaviour level',
+    'dominant_personality_trait': 'personality trait', 'short_term_memory_level': 'short-term memory level',
+    'positive_affect_level': 'positive affect level', 'cognitive_reflection': 'cognitive reflection level',
+    'sensation_seeking': 'sensation-seeking level', 'phishing_training': 'phishing training history',
 }
 _PRIVACY = {
     'role': 'A public role can connect a person with their employer and professional responsibilities.',
@@ -38,6 +43,17 @@ _PRIVACY = {
     'sexual_orientation': 'Publicly listing sexual orientation can expose a person to unwanted assumptions or discriminatory treatment.',
     'home_address': 'Publishing a home address can reduce control over who can locate or contact a household.',
     'personal_email': 'Publishing a personal email can enable unsolicited contact outside work.',
+    'age_bracket': 'Publicly listing an age bracket can expose a person to age-based assumptions or targeting.',
+    'gender': 'Publicly listing gender can expose a person to gender-based assumptions or targeting.',
+    'computer_knowledge': 'Publicly listing computer knowledge can reveal susceptibility to technical scams.',
+    'network_security_knowledge': 'Publicly listing security knowledge can reveal susceptibility to phishing.',
+    'security_behavior_level': 'Publicly listing security behaviour can reveal how cautious a person is with suspicious requests.',
+    'dominant_personality_trait': 'Publicly listing a personality trait can reveal which persuasion tactics are likely to succeed.',
+    'short_term_memory_level': 'Publicly listing memory characteristics can reveal susceptibility to time-pressured scams.',
+    'positive_affect_level': 'Publicly listing mood tendencies can reveal susceptibility to social engineering appeals.',
+    'cognitive_reflection': 'Publicly listing cognitive reflection level can reveal susceptibility to impulsive decisions.',
+    'sensation_seeking': 'Publicly listing sensation-seeking tendencies can reveal susceptibility to novel-sounding scams.',
+    'phishing_training': 'Publicly listing training history can reveal whether a person is prepared to recognise phishing.',
 }
 
 

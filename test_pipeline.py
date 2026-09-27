@@ -142,6 +142,26 @@ class PipelineTests(TestCase):
         fetcher.fetch_page.assert_called_once_with('https://example.invalid/team')
         extractor.process.assert_not_called()
 
+    def test_explicitly_supplied_url_is_always_attempted_despite_low_score_and_page_budget(self):
+        discoverer, fetcher, extractor = MagicMock(), MagicMock(), MagicMock()
+        # The entry URL itself scores low (no OSINT keywords); several higher
+        # scoring, unrelated pages would otherwise fill the one-page budget.
+        discoverer.discover.return_value = ['https://example.invalid', 'https://example.invalid/team',
+                                             'https://example.invalid/staff']
+        fetcher.fetch_page.return_value = None
+        result = Pipeline(extractor, discoverer=discoverer, fetcher=fetcher).run('https://example.invalid', max_pages=1)
+        self.assertEqual(result.selected_count, 1)
+        self.assertEqual(result.pages[0].url, 'https://example.invalid')
+        fetcher.fetch_page.assert_called_once_with('https://example.invalid')
+
+    def test_explicitly_supplied_url_already_selected_is_not_duplicated(self):
+        discoverer, fetcher, extractor = MagicMock(), MagicMock(), MagicMock()
+        discoverer.discover.return_value = ['https://example.invalid/team']
+        fetcher.fetch_page.return_value = None
+        result = Pipeline(extractor, discoverer=discoverer, fetcher=fetcher).run('https://example.invalid/team')
+        self.assertEqual(result.selected_count, 1)
+        self.assertEqual([page.url for page in result.pages], ['https://example.invalid/team'])
+
     def test_no_discoveries_or_no_eligible_urls_do_not_fetch_or_write(self):
         for urls in [[], ['https://example.invalid/login']]:
             discoverer, fetcher, extractor = MagicMock(), MagicMock(), MagicMock()

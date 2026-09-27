@@ -1,6 +1,6 @@
 # Australian employee enrichment
 
-The real and fictional runs use the same `EnrichmentEngine`, structured parser, validation, identity checks, review decisions, Neo4j evidence writes, job progress, cancellation and budget accounting. Only the source provider changes: `LiveSources` uses Serper/public pages; `DemoSources` returns authored copies of the existing 17 `demo.py` people and fixture responses. It does not label arbitrary records as fictional.
+The real and fictional runs use the same `EnrichmentEngine`, structured parser, validation, identity checks, review decisions, Neo4j evidence writes, job progress, cancellation and budget accounting. Only the source provider changes: `LiveSources` uses Serper/public pages; `DemoSources` returns authored copies of the existing 23 `demo.py` people and fixture responses. It does not label arbitrary records as fictional.
 
 ## Populate a profile and demonstrate AI context
 

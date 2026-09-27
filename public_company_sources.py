@@ -13,6 +13,28 @@ from xml.etree import ElementTree as ET
 
 from enrichment_sources import LiveSources, SourceError, public_url
 
+# A bounded, curated fallback for sites with no working sitemap and whose entry
+# page does not directly link to their people page (e.g. it is one click below
+# an "About" page). These are common, human-authored path conventions, not a
+# broad directory brute force; each guess still passes through the same public
+# transport, robots and same-origin checks as any other discovered candidate.
+_TEAM_PAGE_LEAVES = (
+    "team", "our-team", "meet-the-team", "meet-our-team", "the-team",
+    "staff", "our-staff", "our-people", "people", "leadership", "management", "meet-us",
+)
+_TEAM_PAGE_SECTIONS = (
+    ("about", "team"), ("about", "our-team"), ("about", "meet-the-team"),
+    ("about-us", "team"), ("about-us", "our-team"), ("about-us", "meet-the-team"),
+    ("company", "team"), ("company", "our-team"),
+    ("who-we-are", "team"), ("who-we-are", "our-team"),
+    ("contact", "meet-us"), ("contact", "team"),
+    ("careers", "team"),
+)
+TEAM_PAGE_GUESSES = tuple(dict.fromkeys(
+    [f"/{leaf}" for leaf in _TEAM_PAGE_LEAVES] +
+    [f"/{section}/{leaf}" for section, leaf in _TEAM_PAGE_SECTIONS]
+))
+
 
 class PublicURLFetcher:
     def __init__(self):
@@ -111,8 +133,10 @@ class PublicWebsiteDiscoverer:
         except SourceError:
             self.last_failures.append('robots discovery')
 
+        entry_ok = False
         try:
             page = self.sources.fetch(entry)
+            entry_ok = True
             origins.add(self._origin(page.final_url))
             add(page.final_url, page.final_url)
             from bs4 import BeautifulSoup
@@ -125,6 +149,7 @@ class PublicWebsiteDiscoverer:
             self.last_failures.append('entry page discovery')
 
         visited = set()
+        sitemap_ok = False
         while sitemap_queue and len(visited) < self.MAX_SITEMAPS and len(candidates) < self.MAX_URLS:
             current = sitemap_queue.popleft()
             if current in visited:
@@ -142,6 +167,7 @@ class PublicWebsiteDiscoverer:
                 kind = root.tag.rsplit('}', 1)[-1]
                 if kind not in {'urlset', 'sitemapindex'}:
                     raise SourceError('Unsupported sitemap document.')
+                sitemap_ok = True
                 child_kind = 'url' if kind == 'urlset' else 'sitemap'
                 for child in root:
                     if child.tag.rsplit('}', 1)[-1] != child_kind:
@@ -164,4 +190,14 @@ class PublicWebsiteDiscoverer:
             self.last_failures.append('sitemap limit')
         if not candidates:
             self.last_failures.extend(optional_missing)
+        # No working sitemap means a people page one click below the entry page
+        # (e.g. under "About") may never surface from links alone. A small,
+        # curated set of common team-page paths is added as a redundant guess;
+        # each still passes through the same public/robots/same-origin checks,
+        # and one that does not exist simply fails to fetch like any other candidate.
+        # Only applied once the entry page itself was actually reachable: a fully
+        # unreachable/blocked target must still discover zero candidates.
+        if entry_ok and not sitemap_ok:
+            for guess in TEAM_PAGE_GUESSES:
+                add(guess, origin + '/')
         return sorted(candidates)
